@@ -29,3 +29,18 @@ assert.equal(bandRows({ base: { name: "<b>Literal name</b>", import_cost: 1, imp
 assert.throws(() => bandRows({ bad: { import_cost: Infinity, import_kwh: 1 } }));
 assert.throws(() => bandRows({ bad: { import_cost: 1, import_kwh: -1 } }));
 console.log("PASS: time-band grouping, ordering, credits, zero costs and invalid readings");
+
+const cardSource = (await readFile(new URL("../custom_components/solarcost/solarcost-card.js", import.meta.url), "utf8"))
+  .replace('"./solarcost-tou-card.js"', JSON.stringify(`data:text/javascript;base64,${source.toString("base64")}`));
+const { reportGrouping, relatedStates } = await import(`data:text/javascript;base64,${Buffer.from(cardSource).toString("base64")}`);
+assert.equal(reportGrouping("2026-07-01", "2026-08-31"), "day");
+assert.equal(reportGrouping("2026-06-30", "2026-08-31"), "month");
+assert.equal(reportGrouping("2024-01-01", "2026-08-31"), "year");
+const bill = { entity_id: "sensor.renamed_bill", attributes: { entry_id: "one", metric: "net_cost", period: "month" } };
+const rate = { attributes: { entry_id: "one", metric: "import_rate", period: "current" } };
+const foreign = { attributes: { entry_id: "two", metric: "net_cost", period: "month" } };
+const energy = { attributes: { entry_id: "one", metric: "solar_kwh", period: "month" } };
+assert.deepEqual(relatedStates({ bill, rate, foreign, energy }, bill), [bill, rate]);
+assert.deepEqual(relatedStates({ bill }, undefined), []);
+assert.deepEqual(relatedStates({ bill }, energy), []);
+console.log("PASS: scalable report grouping, renamed sensors and separate SolarCost setups");

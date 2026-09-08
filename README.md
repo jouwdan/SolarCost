@@ -118,17 +118,45 @@ A cheaper EV period inside a night tariff needs separate night bands on either s
 
 Replace these example prices and times with your own tariff. SolarCost starts tracking when you save the completed setup.
 
+## The card in action
+
+One card, one selected period. Switch between the energy overview, time-of-use costs and interactive bill or energy history. These screenshots use **example data**, not a household's readings.
+
+<p>
+  <img src="docs/screenshots/overview.png" alt="SolarCost Overview with estimated bill and four energy totals" width="320">
+  <img src="docs/screenshots/costs.png" alt="SolarCost Costs comparing Day, EV, Peak and Night rates with export credit" width="320">
+</p>
+<p>
+  <img src="docs/screenshots/history.png" alt="SolarCost bill history with positive charges and negative credits" width="320">
+  <img src="docs/screenshots/energy.png" alt="SolarCost energy history with solar, home usage, import and export bars" width="320">
+</p>
+
 ## Add the dashboard card
 
-The included [card template](custom_components/solarcost/card.yaml) displays today's bill, solar generation, household usage, grid import/export, bill totals for every reporting period, charges, current rates, import costs by time band and a monthly energy chart. The compact time-of-use chart is bundled with SolarCost and loads automatically; the remaining cards are built into Home Assistant. No separate card plugins are required.
+The included **SolarCost card** brings energy, bill estimates, tariff costs and history into one card. It loads automatically with the integration; no separate frontend plugins or Recorder statistics are required.
 
-1. Open the [card.yaml template](custom_components/solarcost/card.yaml) and copy its contents. It is also included in the installed integration at `custom_components/solarcost/card.yaml`.
-2. Open your dashboard and choose **Edit → Add card → By card → Manual**.
-3. Paste the complete YAML, check the preview and save.
+1. Restart Home Assistant after installing or updating SolarCost, then refresh your browser.
+2. Open your dashboard and choose **Edit → Add card → By card**, then search for **SolarCost**.
+3. In the visual editor, choose your **SolarCost bill sensor** and optionally set a title or time-band display labels. Check the preview and save.
 
-The template assumes the name **SolarCost** and the default 12-month and 5-year windows. If an entity is not found, look up its actual ID under **Settings → Devices & services → SolarCost → Entities** and update the YAML. You can remove any cards or charge rows you do not need.
+You can also choose **Manual** and paste the [card template](custom_components/solarcost/card.yaml):
 
-The monthly chart fills as Home Assistant records statistics for the lifetime energy sensors. It may initially show **No statistics found**. The template is a starting point; you can also build your own dashboard from SolarCost's sensors.
+```yaml
+type: custom:solarcost-card
+entity: sensor.solarcost_this_month_estimated_bill
+```
+
+Choose any **Estimated bill** sensor belonging to your SolarCost setup. Its reporting period is selected initially; the card finds the setup's other periods and current rates automatically, even if you rename their entity IDs or change your month/year windows. Look up the bill sensor under **Settings → Devices & services → SolarCost → Entities**. For multiple SolarCost setups, add a card for each setup. An optional `title` changes the card heading.
+
+Use the period selector for **Today**, **This week**, **This month**, **Last month**, your configured month/year windows or **All time**. Every view follows the same selected period:
+
+- **Overview:** a prominent estimated bill or credit, plus solar generation, home usage, grid import and export in kWh, with imported electricity cost and export credit.
+- **Costs:** horizontal bars compare costs by time-of-use band, with each band's kWh underneath. A green export-credit bar underneath uses the same scale to show the offset against imports. The bill breakdown includes standing charges, monthly fees and export credit. Expand **Current rates** to see the effective import and export prices now.
+- **History:** switch between bill and energy charts, then select a date’s bars for exact amounts below the chart. With only one recorded period, its details are already shown. Short ranges use daily bars, medium ranges use months, and long ranges use years. Credit amounts extend below zero. Charts read SolarCost's own stored ledger.
+
+For a two-month bill, choose **Custom dates**, enter the supplier's start and end dates, then select **Apply**. Both dates are included. Overview, Costs and History all use that report. Custom reports are snapshots; select **Apply** again to refresh them. Standard reporting periods update automatically.
+
+When upgrading from the earlier dashboard template, replace the entire SolarCost vertical stack with the short configuration above. The older standalone `custom:solarcost-tou-card` remains supported. You can still build other dashboards using the individual SolarCost sensors.
 
 ## Understand your estimates
 
@@ -161,11 +189,9 @@ The **Current import rate** sensor shows the active import price after configure
 
 Every **Import cost** and **Estimated bill** sensor includes a `time_of_use` attribute with imported kWh and cost for each configured band, such as EV, Night or Peak. `base` means the price outside your time bands (often Day); named bands use keys such as `band:EV`. Costs include the discount and VAT applied when the energy was recorded. Export credit, standing charges and monthly fees remain separate.
 
-The dashboard shows one reporting period at a time, with **This month** selected initially and buttons for **Today** and **Last month**. Horizontal bars compare each band's cost, with euro amounts (or your configured currency) alongside them. Bands without imported energy stay out of the chart; expand **Energy details** to see kWh for every band. Negative import costs keep their minus sign, and bar lengths compare absolute amounts.
+The card's **Costs** view shows one reporting period at a time. Bars compare absolute costs, preserving minus signs for import credits. Bands with no imported energy are omitted. The smaller kWh figures show how much energy was billed at each rate. Nonzero amounts below one cent use up to six decimal places so small charges do not appear free.
 
-To show another reporting window, add its import-cost sensor to the card's `entities` list. The first entity is selected initially. Replace the old markdown breakdown with the `custom:solarcost-tou-card` block from the updated template, restart Home Assistant after upgrading, and refresh your browser. The chart loads automatically with the integration.
-
-Optionally add `band_names` to the chart configuration to relabel or combine bands for display. Bands mapped to the same name are added together in the chart; the ledger and reports retain the original bands. For example:
+Use **Time-band labels** in the visual editor, or add `band_names` in YAML, to relabel or combine bands for display. Bands mapped to the same name are added together in the chart; the ledger and reports retain the original bands. For example:
 
 ```yaml
 band_names:
@@ -225,7 +251,7 @@ SolarCost estimates when energy was used by spreading the increase between conse
 - Supplier rounding, billing-specific levies, meter corrections and additional credits can cause differences from an invoice.
 - Opening balances, payments, one-off credits, tiered usage prices and demand charges are not included.
 
-SolarCost keeps its own daily history independently of Home Assistant's Recorder cleanup. Dashboard charts using Home Assistant statistics still depend on Recorder collecting the relevant sensors.
+SolarCost keeps its own daily history independently of Home Assistant's Recorder cleanup. The included card uses this ledger; any separate dashboard charts you build with Home Assistant statistics still depend on Recorder.
 
 ## Updates and backups
 
@@ -244,7 +270,7 @@ Removing the integration does not delete its stored history. Adding it again cre
 | Energy totals start at zero | This is expected. SolarCost starts from each meter's current reading and counts subsequent increases. Earlier meter totals are not imported. |
 | Energy advances only in whole kWh | Check the source meter's history. If it also jumps by 1 kWh, use a finer-resolution energy meter or the power-to-energy helpers described above. SolarCost does not round energy to whole kWh. |
 | The dashboard says Entity not found | Replace the example entity ID with the one shown in your SolarCost entity list. |
-| The monthly chart is empty | Allow time for Home Assistant to collect statistics, and check that Recorder includes the SolarCost lifetime energy sensors. |
+| The card or chart is missing | Restart Home Assistant after upgrading and refresh the browser. Check that the configured entity is a SolarCost estimated-bill sensor. History begins at installation; earlier periods have no recorded data. |
 | A bill has partial history or several periods show the same total | The period may start before SolarCost was installed. Check the bill sensor's `tracking_since` and `partial_history` attributes. |
 | Costs stop updating | Check the source sensors. A bill sensor's `source_status` and `meter_diagnostics` attributes show unavailable or invalid sources and the last accepted readings. |
 | The active rate looks wrong | Check the local time zone, selected weekdays and band boundaries. The current import rate already includes configured discounts and VAT. |

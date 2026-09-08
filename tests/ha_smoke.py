@@ -42,7 +42,7 @@ async def main():
             )
             assert await async_setup_component(hass, "solarcost", {})
             assert any(
-                url.startswith("/solarcost/solarcost-tou-card.js?v=")
+                url.startswith("/solarcost/solarcost-card.js?v=")
                 for url in hass.data[frontend.DATA_EXTRA_MODULE_URL].urls
             )
             await hass.async_start()
@@ -174,14 +174,18 @@ async def main():
             dashboard = yaml.safe_load(
                 (Path(directory) / "custom_components/solarcost/card.yaml").read_text()
             )
-            card = next(
-                card
-                for card in dashboard["cards"]
-                if card.get("type") == "custom:solarcost-tou-card"
-            )
-            for item in card["entities"]:
-                entity = item["entity"].replace("sensor.solarcost_", "sensor.solarcost_test_")
-                assert hass.states.get(entity).attributes["time_of_use"], entity
+            assert dashboard["type"] == "custom:solarcost-card"
+            entity = dashboard["entity"].replace("sensor.solarcost_", "sensor.solarcost_test_")
+            bill = hass.states.get(entity)
+            assert bill.attributes["entry_id"] == entry.entry_id
+            assert bill.attributes["period"] == "month"
+            assert bill.attributes["metric"] == "net_cost"
+            assert bill.attributes["period_name"] == "This month"
+            assert bill.attributes["time_of_use"]
+            current = hass.states.get("sensor.solarcost_test_current_import_rate")
+            assert current.attributes["entry_id"] == entry.entry_id
+            assert current.attributes["metric"] == "import_rate"
+            assert current.attributes["time_zone"] == "Europe/Dublin"
             # Two rapid updates must preserve the intermediate reset, despite debouncing.
             hass.states.async_set("sensor.test_import", 0, attributes)
             hass.states.async_set("sensor.test_import", 115, attributes)

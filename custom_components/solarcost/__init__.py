@@ -24,9 +24,12 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass, config):
     """Expose date-range billing reports, including when no entry is loaded."""
     integration = await async_get_integration(hass, DOMAIN)
-    card_url = "/solarcost/solarcost-tou-card.js"
+    card_url = "/solarcost/solarcost-card.js"
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(card_url, str(Path(__file__).parent / "solarcost-tou-card.js"), False)]
+        [
+            StaticPathConfig(f"/solarcost/{name}", str(Path(__file__).parent / name), False)
+            for name in ("solarcost-card.js", "solarcost-tou-card.js")
+        ]
     )
     frontend.add_extra_js_url(hass, f"{card_url}?v={integration.version}")
 

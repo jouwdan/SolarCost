@@ -1,0 +1,155 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SolarCost card preview</title>
+<style>
+  body { margin: 20px; background: #111; color: #eee; font: 14px system-ui; }
+  main { display: flex; align-items: start; gap: 24px; flex-wrap: wrap; }
+  ha-card { display: block; background: var(--card-background-color); border-radius: 16px; border: 1px solid var(--divider-color); }
+  solarcost-card { width: 340px; --primary-text-color: #eee; --secondary-text-color: #aaa; --card-background-color: #1c1c1c; --secondary-background-color: #282828; --divider-color: #ffffff1f; --primary-color: #60a5fa; }
+  solarcost-card.wide { width: 500px; --primary-text-color: #222; --secondary-text-color: #666; --card-background-color: #fff; --secondary-background-color: #f2f4f7; --divider-color: #0002; --primary-color: #3378cf; }
+</style>
+<h1>SolarCost · sample data only</h1>
+<p id="checks">Running browser checks…</p>
+<main><solarcost-card></solarcost-card><solarcost-card class="wide"></solarcost-card></main>
+<script type="module">
+import "../custom_components/solarcost/solarcost-card.js";
+customElements.define("ha-card", class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" }).innerHTML = '<style>:host { display: block; background: var(--card-background-color); border-radius: 16px; border: 1px solid var(--divider-color); }</style><slot></slot>';
+  }
+});
+const totals = { solar_kwh: 183.257, usage_kwh: 287.417, import_kwh: 215.614, export_kwh: 89.201, import_cost: 42.93, export_credit: 16.5, standing_charge: 8.4, fixed_charge: 0.49, net_cost: 35.32 };
+const bands = {
+  base: { name: "Base rate", import_cost: 21.16, import_kwh: 61.14 },
+  "band:EV": { name: "EV", import_cost: 11.16, import_kwh: 120.15 },
+  "band:Night before EV": { name: "Night before EV", import_cost: 2.11, import_kwh: 9.904 },
+  "band:Night after EV": { name: "Night after EV", import_cost: 2.61, import_kwh: 12.25 },
+  "band:Peak": { name: "Peak", import_cost: 5.89, import_kwh: 12.17 },
+};
+const periodNames = { today: "Today", week: "This week", month: "This month", last_month: "Last month", last_months: "Last 12 months", year: "This year", last_years: "Last 5 years", all_time: "All time" };
+const states = {};
+for (const [period, name] of Object.entries(periodNames)) {
+  const entity_id = `sensor.${period}_bill`;
+  states[entity_id] = { entity_id, state: period === "today" ? "-1.23" : period === "last_month" ? "unknown" : "35.32", attributes: {
+    ...totals, entry_id: "demo", metric: "net_cost", period, period_name: name, unit_of_measurement: "EUR",
+    start: period === "last_month" ? "2026-08-01" : "2026-09-01", end: period === "last_month" ? "2026-08-31" : "2026-09-08",
+    tracking_since: "2026-09-01T12:00:00+01:00", updated_at: "2026-09-08T12:00:00Z", has_history: period !== "last_month", partial_history: period !== "today", time_of_use: bands,
+  } };
+}
+for (const [metric, value] of [["import_rate", 0.3461], ["export_rate", 0.185]]) states[`sensor.${metric}`] = { state: String(value), attributes: { entry_id: "demo", metric, period: "current" } };
+const makeReport = request => ({ response: {
+  start: request.service_data.start, end: request.service_data.end, currency: "EUR", tracking_since: "2026-09-01T12:00:00+01:00", partial_history: true,
+  totals, time_of_use: bands, periods: Array.from({ length: 8 }, (_, i) => ({ ...totals, period: `2026-09-0${i + 1}`, net_cost: [-2.3, 4.9, 5.35, -1.1, 8.2, 10.27, 6.12, 3.88][i], solar_kwh: 20 + i, usage_kwh: 25 + i * 2, import_kwh: 18 + i * 2, export_kwh: 8 + i }))
+} });
+let requests = [];
+const hass = { states, locale: { language: "en-IE" }, callWS: async request => { requests.push(request); return makeReport(request); } };
+const cards = [...document.querySelectorAll("solarcost-card")];
+for (const card of cards) {
+  card.setConfig({ entity: "sensor.month_bill", band_names: { base: "Day", "band:Night before EV": "Night", "band:Night after EV": "Night" } });
+  card.hass = hass;
+}
+const card = cards[0], root = card.shadowRoot;
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+const choose = value => { const select = root.querySelector(".period"); select.value = value; select.dispatchEvent(new Event("change")); };
+try {
+  assert(root.querySelectorAll(".period option").length === 9, "All periods and custom dates must be offered");
+  assert(root.querySelector(".amount").textContent === "€35.32", "Overview must show net bill");
+  assert(card.money(0.004151) === "€0.004151", "Sub-cent costs must not appear free");
+  assert(card.money(-0.004151) === "-€0.004151", "Sub-cent credits must keep their sign");
+  root.querySelector('[data-view="costs"]').click();
+  assert(root.querySelectorAll(".band").length === 5, "Split Night bands must merge and export credit must appear underneath");
+  assert(root.querySelector(".bars").textContent.includes("€4.72"), "Night costs must add up");
+  assert(root.querySelector(".band:last-child").textContent.includes("Export credit-€16.50"), "Export credit must reduce costs on the chart");
+  assert(root.querySelector(".export .fill").style.background === "var(--sc-green)", "Export credit must be green");
+  const rates = root.querySelector(".rates").parentElement; rates.open = true;
+  const costs = root.querySelector('[data-view="costs"]'); costs.focus();
+  card.hass = { ...hass, states: { ...states, "sensor.month_bill": { ...states["sensor.month_bill"] } } };
+  assert(rates.open && root.activeElement === costs, "Updates must preserve details and focus");
+  choose("last_month");
+  assert(root.querySelector(".amount").textContent === "—" && root.querySelector(".context").textContent.includes("No recorded history"), "Unknown history must not show a zero bill");
+  choose("today");
+  assert(root.querySelector(".eyebrow").textContent === "Estimated credit" && root.querySelector(".amount").textContent === "€1.23", "Credit label must explain positive display amount");
+  choose("month");
+  root.querySelector('[data-view="history"]').click(); await tick();
+  assert(requests.at(-1).return_response && requests.at(-1).service_data.config_entry_id === "demo", "History must request a report for the selected setup");
+  assert(root.querySelectorAll(".column").length === 8, "History must render report periods");
+  root.querySelector(".column").click();
+  assert(root.querySelector(".selection").textContent.includes("Estimated credit€2.30"), "Negative history must remain a credit");
+  root.querySelector(".chart-toggle").click();
+  assert(root.querySelectorAll(".column i").length === 32, "Energy chart must show four series");
+  const assertBarsFit = () => {
+    const bounds = root.querySelector(".plot").getBoundingClientRect();
+    for (const bar of root.querySelectorAll(".column i:not([hidden])")) {
+      const rect = bar.getBoundingClientRect();
+      assert(rect.left >= bounds.left - 0.5 && rect.right <= bounds.right + 0.5, "Every energy bar must stay within the plot");
+    }
+  };
+  assertBarsFit();
+  root.querySelectorAll(".column")[7].click();
+  assert(root.querySelector(".selection").textContent.includes("27 kWh"), "Selecting another day must update energy details");
+  card.hass = { ...hass, callWS: async request => {
+    const report = makeReport(request); report.response.periods = report.response.periods.slice(0, 1); return report;
+  } };
+  choose("today"); await tick();
+  assertBarsFit();
+  assert(root.querySelector(".history-status").textContent.startsWith("One recorded day."), "A single day must explain that its details are already shown");
+  let resolveSlow;
+  card.hass = { ...hass, callWS: request => new Promise(resolve => { resolveSlow = () => resolve(makeReport(request)); }) };
+  choose("week");
+  assert(root.querySelector(".history-status").textContent.includes("Loading"), "A new range must hide the previous chart while loading");
+  choose("last_month"); resolveSlow(); await tick();
+  assert(!card.report && root.querySelector(".amount").textContent === "—", "A stale response must not replace a newer period");
+  card.hass = hass;
+  choose("custom");
+  root.querySelector('[name="start"]').value = "2026-07-01";
+  root.querySelector('[name="end"]').value = "2026-08-31";
+  root.querySelector(".dates").dispatchEvent(new Event("submit", { cancelable: true })); await tick();
+  assert(requests.at(-1).service_data.group_by === "day", "Two-month reports must use daily groups");
+  assert(root.querySelector(".amount").textContent === "—", "Custom dates before tracking must show no history");
+  root.querySelector('[name="start"]').value = "2026-09-01";
+  root.querySelector('[name="end"]').value = "2026-09-08";
+  root.querySelector(".dates").dispatchEvent(new Event("submit", { cancelable: true })); await tick();
+  assert(root.querySelector(".amount").textContent === "€35.32", "Custom report totals must drive the card");
+  card.hass = { ...hass, callWS: async () => { throw new Error("Sample connection error"); } };
+  root.querySelector(".dates").dispatchEvent(new Event("submit", { cancelable: true })); await tick();
+  assert(root.querySelector(".context").textContent === "Sample connection error", "Custom report failures must be visible");
+  card.hass = hass;
+  choose("month"); root.querySelector('[data-view="overview"]').click();
+  cards[1].shadowRoot.querySelector('[data-view="costs"]').click();
+  const editor = document.createElement("solarcost-card-editor");
+  editor.setConfig({ type: "custom:solarcost-card", entity: "sensor.month_bill", band_names: { base: "Day" } });
+  editor.hass = hass;
+  let edited;
+  editor.addEventListener("config-changed", event => { edited = event.detail.config; });
+  assert(editor.shadowRoot.querySelectorAll(".entity option").length === 9, "Visual editor must offer only bill sensors");
+  const bandInput = editor.shadowRoot.querySelector('[data-band="band:EV"]');
+  bandInput.value = "Cheap overnight"; bandInput.dispatchEvent(new Event("change"));
+  assert(edited.band_names.base === "Day" && edited.band_names["band:EV"] === "Cheap overnight", "Visual band edits must preserve other labels");
+  const titleInput = editor.shadowRoot.querySelector(".title");
+  titleInput.value = "Electricity"; titleInput.dispatchEvent(new Event("change"));
+  assert(edited.title === "Electricity" && edited.type === "custom:solarcost-card", "Visual edits must preserve the complete card configuration");
+  titleInput.value = ""; titleInput.dispatchEvent(new Event("change"));
+  assert(!("title" in edited), "Clearing the title must restore its default");
+    document.querySelector("#checks").textContent = "PASS: periods, credits, TOU grouping, live updates, report history, stale responses, custom dates, errors, chart bounds, export credit and visual editing.";
+} catch (error) { document.querySelector("#checks").textContent = `FAIL: ${error.message}`; throw error; }
+
+// Open ?view=overview|costs|history|energy for clean, reproducible README captures.
+const showcase = new URLSearchParams(location.search).get("view");
+if (["overview", "costs", "history", "energy"].includes(showcase)) {
+  document.querySelector("h1").textContent = "SolarCost · example data";
+  document.querySelector("h1").style.cssText = "font-size:14px;font-weight:400;color:#aaa";
+  document.querySelector("#checks").hidden = true;
+  cards[1].hidden = true;
+  cards[1].style.display = "none";
+  card.style.width = "400px";
+  card.chart = showcase === "energy" ? "energy" : "bill";
+  root.querySelector(`[data-view="${showcase === "energy" ? "history" : showcase}"]`).click();
+  root.querySelector(".bill-details").open = false;
+  root.querySelector(".rates").parentElement.open = false;
+  document.querySelector("h1").tabIndex = -1;
+  document.querySelector("h1").focus();
+}
+</script>

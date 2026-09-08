@@ -42,6 +42,7 @@ class SolarCostSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry, period, metric):
         super().__init__(coordinator)
         self.period, self.metric = period, metric
+        self.entry_id = entry.entry_id
         self._attr_unique_id = f"{entry.entry_id}_{period}_{metric}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -83,14 +84,17 @@ class SolarCostSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        identity = {"entry_id": self.entry_id, "period": self.period, "metric": self.metric}
         if self.period == "current":
-            return {"time_zone": self.coordinator.settings["time_zone"]}
+            return {**identity, "time_zone": self.coordinator.settings["time_zone"]}
         data = self.coordinator.data
         period = data["periods"][self.period]
         attributes = {
             key: period[key] for key in ("start", "end", "partial_history", "has_history")
         }
         attributes["tracking_since"] = data["since"]
+        attributes.update(identity)
+        attributes["period_name"] = PERIOD_NAMES[self.period].format(**self.coordinator.settings)
         if self.metric in ("import_cost", "net_cost"):
             attributes["time_of_use"] = period["time_of_use"]
             attributes["time_of_use_since"] = data["time_of_use_since"]
