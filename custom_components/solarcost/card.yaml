@@ -1,0 +1,91 @@
+# Dashboard → Edit → Add card → Manual: paste this entire file.
+# Uses built-in cards only. Adjust entity IDs if you renamed SolarCost or
+# changed the default reporting windows (12 months / 5 years).
+type: vertical-stack
+cards:
+  - type: heading
+    heading: SolarCost
+    heading_style: title
+    icon: mdi:solar-power
+  - type: tile
+    entity: sensor.solarcost_today_estimated_bill
+    name: Today's estimated bill
+    icon: mdi:cash
+    color: teal
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.solarcost_today_solar_generation
+        name: Solar today
+        icon: mdi:white-balance-sunny
+        color: amber
+      - type: tile
+        entity: sensor.solarcost_today_energy_usage
+        name: Usage today
+        icon: mdi:home-lightning-bolt
+        color: blue
+      - type: tile
+        entity: sensor.solarcost_today_grid_import
+        name: Imported today
+        icon: mdi:transmission-tower-import
+        color: orange
+      - type: tile
+        entity: sensor.solarcost_today_grid_export
+        name: Exported today
+        icon: mdi:transmission-tower-export
+        color: teal
+  - type: entities
+    title: Bill estimates
+    show_header_toggle: false
+    entities:
+      - entity: sensor.solarcost_this_week_estimated_bill
+        name: This week
+      - entity: sensor.solarcost_this_month_estimated_bill
+        name: This month
+      - entity: sensor.solarcost_last_12_months_estimated_bill
+        name: Last 12 months
+      - entity: sensor.solarcost_this_year_estimated_bill
+        name: This year
+      - entity: sensor.solarcost_last_5_years_estimated_bill
+        name: Last 5 years
+      - entity: sensor.solarcost_all_time_estimated_bill
+        name: All time
+  - type: entities
+    title: Today's costs and current rates
+    show_header_toggle: false
+    entities:
+      - entity: sensor.solarcost_today_import_cost
+        name: Imported energy cost
+      - entity: sensor.solarcost_today_export_credit
+        name: Export credit
+      - entity: sensor.solarcost_today_standing_charges
+        name: Standing charge accrued
+      - entity: sensor.solarcost_today_monthly_fixed_charges
+        name: Monthly levy accrued
+      - entity: sensor.solarcost_current_import_rate
+        name: Import rate now
+      - entity: sensor.solarcost_current_export_rate
+        name: Export rate now
+  - type: statistics-graph
+    title: Monthly energy
+    chart_type: bar
+    period: month
+    days_to_show: 365
+    stat_types:
+      - change
+    entities:
+      - entity: sensor.solarcost_all_time_solar_generation
+        name: Solar
+      - entity: sensor.solarcost_all_time_energy_usage
+        name: Usage
+      - entity: sensor.solarcost_all_time_grid_import
+        name: Import
+      - entity: sensor.solarcost_all_time_grid_export
+        name: Export
+  - type: markdown
+    content: >-
+      Estimates include configured tax, discounts and fixed charges.
+      Negative bills mean credit. History starts when SolarCost is set up;
+      the monthly chart fills as Home Assistant records statistics.
