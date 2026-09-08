@@ -1,0 +1,62 @@
+# Optional Home Assistant package: convert live power in W to energy in kWh.
+# Replace sensor.solar_power, sensor.home_power and sensor.grid_power below.
+# Grid power must be positive for import and negative for export.
+# Copy outside custom_components before editing; HACS updates replace that folder.
+template:
+  - sensor:
+      - name: SolarCost Import Power
+        unique_id: solarcost_import_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        availability: "{{ is_number(states('sensor.grid_power')) }}"
+        state: "{{ [states('sensor.grid_power') | float(0), 0] | max }}"
+      - name: SolarCost Export Power
+        unique_id: solarcost_export_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        availability: "{{ is_number(states('sensor.grid_power')) }}"
+        state: "{{ [-(states('sensor.grid_power') | float(0)), 0] | max }}"
+
+sensor:
+  - platform: integration
+    name: SolarCost Solar Meter
+    unique_id: solarcost_solar_meter
+    source: sensor.solar_power
+    unit_prefix: k
+    unit_time: h
+    method: left
+    round: 6
+    max_sub_interval:
+      minutes: 1
+  - platform: integration
+    name: SolarCost Usage Meter
+    unique_id: solarcost_usage_meter
+    source: sensor.home_power
+    unit_prefix: k
+    unit_time: h
+    method: left
+    round: 6
+    max_sub_interval:
+      minutes: 1
+  - platform: integration
+    name: SolarCost Import Meter
+    unique_id: solarcost_import_meter
+    source: sensor.solarcost_import_power
+    unit_prefix: k
+    unit_time: h
+    method: left
+    round: 6
+    max_sub_interval:
+      minutes: 1
+  - platform: integration
+    name: SolarCost Export Meter
+    unique_id: solarcost_export_meter
+    source: sensor.solarcost_export_power
+    unit_prefix: k
+    unit_time: h
+    method: left
+    round: 6
+    max_sub_interval:
+      minutes: 1

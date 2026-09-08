@@ -6,6 +6,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import yaml
 from homeassistant import bootstrap, loader
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
@@ -19,9 +20,13 @@ async def main():
         )
         hass = HomeAssistant(directory)
         loader.async_setup(hass)
+        power_package = yaml.safe_load(
+            (Path(directory) / "custom_components/solarcost/power_meters.yaml").read_text()
+        )
         try:
             assert await bootstrap.async_from_config_dict(
                 {
+                    **power_package,
                     "homeassistant": {
                         "time_zone": "Europe/Dublin",
                         "currency": "EUR",
@@ -30,12 +35,43 @@ async def main():
                         "longitude": 0,
                         "elevation": 0,
                         "unit_system": "metric",
-                    }
+                    },
                 },
                 hass,
             )
             assert await async_setup_component(hass, "solarcost", {})
             await hass.async_start()
+            power_attributes = {
+                "device_class": "power",
+                "state_class": "measurement",
+                "unit_of_measurement": "W",
+            }
+            for source, value in (("solar", 3600), ("home", 600), ("grid", -1200)):
+                hass.states.async_set(f"sensor.{source}_power", value, power_attributes)
+            await hass.async_block_till_done()
+            assert float(hass.states.get("sensor.solarcost_import_power").state) == 0
+            assert float(hass.states.get("sensor.solarcost_export_power").state) == 1200
+            await asyncio.sleep(0.1)
+            for source, value in (("solar", 3601), ("home", 601), ("grid", -1201)):
+                hass.states.async_set(f"sensor.{source}_power", value, power_attributes)
+            await hass.async_block_till_done()
+            for source in ("solar", "usage", "export"):
+                meter = hass.states.get(f"sensor.solarcost_{source}_meter")
+                assert 0 < float(meter.state) < 1, meter
+                assert meter.attributes["unit_of_measurement"] == "kWh", meter
+                assert meter.attributes["state_class"] == "total", meter
+            hass.states.async_set("sensor.grid_power", 1200, power_attributes)
+            await hass.async_block_till_done()
+            assert float(hass.states.get("sensor.solarcost_import_power").state) == 1200
+            assert float(hass.states.get("sensor.solarcost_export_power").state) == 0
+            await asyncio.sleep(0.1)
+            hass.states.async_set("sensor.grid_power", 1201, power_attributes)
+            await hass.async_block_till_done()
+            assert 0 < float(hass.states.get("sensor.solarcost_import_meter").state) < 1
+            hass.states.async_set("sensor.grid_power", "unavailable", power_attributes)
+            await hass.async_block_till_done()
+            for source in ("import", "export"):
+                assert hass.states.get(f"sensor.solarcost_{source}_power").state == "unavailable"
             attributes = {
                 "device_class": "energy",
                 "state_class": "total_increasing",
@@ -144,7 +180,7 @@ async def main():
             assert entry.runtime_data.data["periods"]["all_time"]["import_kwh"] == 125
             assert await hass.config_entries.async_unload(entry.entry_id)
             print(
-                "PASS: setup, 65 translated sensors, energy/cost updates, reports, queued reset, reload persistence, options and unload"
+                "PASS: fractional power helpers, grid direction, setup, 65 translated sensors, energy/cost updates, reports, queued reset, reload persistence, options and unload"
             )
         finally:
             await hass.async_stop()

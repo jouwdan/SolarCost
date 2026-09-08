@@ -92,6 +92,18 @@ class AccountingTest(unittest.TestCase):
         self.assertEqual(rates_at(config, datetime(2026, 1, 3, 6)), (0.1, 0.2))
         self.assertEqual(rates_at(config, datetime(2026, 1, 4, 6)), (0.3, 0.15))
 
+    def test_fractional_kwh_preserves_watt_hours_and_costs(self):
+        end = self.start + 60
+        deltas = {"solar": 0.123, "usage": 0.001, "import": 0.025, "export": 0.007}
+        self.ledger.update(
+            BASE, [sample(source, 100 + delta, end) for source, delta in deltas.items()], end
+        )
+        result = self.total(end)
+        for source, delta in deltas.items():
+            self.assertAlmostEqual(result[f"{source}_kwh"], delta, places=9)
+        self.assertAlmostEqual(result["import_cost"], 0.025 * 0.30, places=9)
+        self.assertAlmostEqual(result["export_credit"], 0.007 * 0.15, places=9)
+
     def test_rate_change_preserves_unreported_intervals(self):
         half = self.start + 43200
         self.ledger.update({**BASE, "import_rate": 0.5, "standing_charge": 1.2}, [], half)

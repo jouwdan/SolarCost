@@ -48,13 +48,34 @@ Enter a name, a three-letter currency code such as `EUR`, `GBP` or `USD`, and se
 | Grid import energy meter | Total energy purchased from the grid |
 | Grid export energy meter | Total energy sent to the grid |
 
-Each sensor must use **Wh, kWh or MWh** and have a state class of **`total` or `total_increasing`**. Use a different sensor for each field. Lifetime counters that update frequently give the best results. Daily counters can also work when their resets are reported correctly.
+Each sensor must use **Wh, kWh or MWh** and have a state class of **`total` or `total_increasing`**. Use a different sensor for each field. Prefer counters that report small energy increments frequently. Some inverter lifetime counters only advance in whole kWh, even when displayed with decimal places; SolarCost then has to wait for each 1 kWh increase. Daily counters can offer finer resolution and also work when their resets are reported correctly.
 
 Select energy sensors, not instantaneous power sensors measured in W or kW. If your system only provides power sensors, first create Home Assistant **Integral helpers** to convert power readings into cumulative energy. Yesterday's totals, rolling totals, signed net import/export sensors and SolarCost's own sensors are not suitable sources.
 
 For homes with batteries, use a measured household-consumption sensor. Calculating consumption as solar generation + grid import − grid export does not account for battery charging and discharging.
 
 Check your Home Assistant time zone before setup. SolarCost keeps the currency and time zone selected at creation for that ledger; changing either requires a new setup with separate history.
+
+#### Fine-grained tracking from power readings
+
+SolarCost preserves fractional energy: **0.001 kWh = 1 Wh**. Watts (W) measure current power; watt-hours (Wh) measure energy accumulated over time. If your source jumps in whole kWh, adding display decimals will not make the readings more precise.
+
+For smoother estimates, use Home Assistant's built-in [Integral helpers](https://www.home-assistant.io/integrations/integration/) to accumulate energy from frequently updated power sensors. In **Settings → Devices & services → Helpers → Create helper → Integral**, select a power source in W, metric prefix **k**, integration time **hours**, precision **6**, method **Left**, and a maximum sub-interval of **1 minute**. This also accumulates energy while power remains constant. Repeat for solar, household consumption, import and export, then select the resulting energy helpers in SolarCost's **Configure → Energy meters** menu and save.
+
+Import and export must be separate non-negative power sources. If your meter provides a signed grid-power sensor, the included [power_meters.yaml](custom_components/solarcost/power_meters.yaml) package splits it and creates all four Integral helpers:
+
+1. Copy the file to your Home Assistant configuration directory as `solarcost_power.yaml`.
+2. Replace `sensor.solar_power`, `sensor.home_power` and `sensor.grid_power` with your W sensors. Verify the grid sensor's sign during known import or export. The example expects positive grid power for import and negative for export; reverse the signs in the two grid templates if your meter uses the opposite convention.
+3. Include the package in `configuration.yaml` as shown below. Merge with any existing `homeassistant` / `packages` configuration rather than creating duplicate keys.
+4. Check the configuration and restart Home Assistant. In SolarCost's energy meter settings, select **SolarCost Solar Meter**, **SolarCost Usage Meter**, **SolarCost Import Meter** and **SolarCost Export Meter**, then save. If helper IDs already exist, use the actual IDs from your entity list in the package.
+
+```yaml
+homeassistant:
+  packages:
+    solarcost_power: !include solarcost_power.yaml
+```
+
+Choose either existing energy meters or these helpers for each source; do not add both together. Switching sources preserves recorded totals and establishes new baselines. Power-derived energy is still an estimate: its accuracy depends on sampling frequency, and it cannot recover energy used while Home Assistant or the power source is offline. Keep the edited package outside `custom_components` so integration updates do not overwrite it.
 
 ### 2. Enter rates and reporting periods
 
@@ -195,6 +216,7 @@ Removing the integration does not delete its stored history. Adding it again cre
 | SolarCost is missing from Add integration | Restart Home Assistant and check the installation path. `manifest.json` must be directly inside `custom_components/solarcost`. |
 | A meter is rejected or missing from the selector | Check that it is an energy sensor in Wh, kWh or MWh with state class `total` or `total_increasing`. Use four distinct sensors. |
 | Energy totals start at zero | This is expected. SolarCost starts from each meter's current reading and counts subsequent increases. Earlier meter totals are not imported. |
+| Energy advances only in whole kWh | Check the source meter's history. If it also jumps by 1 kWh, use a finer-resolution energy meter or the power-to-energy helpers described above. SolarCost does not round energy to whole kWh. |
 | The dashboard says Entity not found | Replace the example entity ID with the one shown in your SolarCost entity list. |
 | The monthly chart is empty | Allow time for Home Assistant to collect statistics, and check that Recorder includes the SolarCost lifetime energy sensors. |
 | A bill has partial history or several periods show the same total | The period may start before SolarCost was installed. Check the bill sensor's `tracking_since` and `partial_history` attributes. |
