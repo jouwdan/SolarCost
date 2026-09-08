@@ -13,7 +13,7 @@ jobs:
   accounting:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -37,14 +37,14 @@ jobs:
   home-assistant:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: >-
           docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint python
           ghcr.io/home-assistant/home-assistant:2026.9.0 tests/ha_smoke.py
   hassfest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: home-assistant/actions/hassfest@master
   hacs:
     runs-on: ubuntu-latest
