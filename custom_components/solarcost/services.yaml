@@ -1,0 +1,26 @@
+get_report:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: solarcost
+    start:
+      required: true
+      example: "2026-01-01"
+      selector:
+        date:
+    end:
+      required: true
+      example: "2026-09-08"
+      selector:
+        date:
+    group_by:
+      default: month
+      selector:
+        select:
+          options:
+            - day
+            - week
+            - month
+            - year

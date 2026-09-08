@@ -1,0 +1,218 @@
+{
+  "title": "SolarCost",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up SolarCost",
+        "description": "Select four separate cumulative energy sensors in Wh, kWh or MWh (total or total_increasing). For power sensors, create Integral helpers first. Currency and the current Home Assistant time zone are fixed for this ledger. Tracking starts when setup is saved.",
+        "data": {
+          "name": "Name",
+          "currency": "Currency (ISO code, e.g. EUR)",
+          "solar_sensor": "Solar generation energy meter",
+          "usage_sensor": "Home consumption energy meter",
+          "import_sensor": "Grid import energy meter",
+          "export_sensor": "Grid export energy meter"
+        }
+      },
+      "rates": {
+        "title": "Rates and reporting periods",
+        "description": "Prices include VAT by default. Enter {currency} per kWh (30 cents = 0.30). Standing charges and monthly levies are optional; leave them at 0 if unused. Only set the optional VAT adjustment when entering tax-exclusive prices. It applies to imports and fixed charges, never export credit. The discount applies only to imported energy. Last N months/years includes the current partial calendar period.",
+        "data": {
+          "import_rate": "Base import price per kWh",
+          "export_rate": "Base export payment per kWh",
+          "standing_charge": "Daily standing charge (optional)",
+          "last_months": "Number of months to track",
+          "last_years": "Number of years to track",
+          "monthly_charge": "Monthly levy / fixed charge (optional)",
+          "vat_percent": "Extra VAT for tax-exclusive prices (optional, %)",
+          "discount_percent": "Import energy discount (optional, %)"
+        }
+      },
+      "bands": {
+        "title": "Time-of-use bands",
+        "description": "{bands}\n\nAdd as many non-overlapping bands as you need (up to 48), then Save.",
+        "menu_options": {
+          "add_band": "Add a time band",
+          "edit_band": "Edit a time band",
+          "remove_band": "Remove time bands",
+          "init": "Back to settings",
+          "save": "Save"
+        }
+      },
+      "band": {
+        "title": "Time-of-use band",
+        "description": "Rates are in {currency} per kWh. Use whole minutes. Overnight bands belong to their starting weekday. Start is inclusive; end is exclusive. Both repeated daylight-saving hours use the same wall-clock tariff.",
+        "data": {
+          "name": "Band name",
+          "start": "Start time",
+          "end": "End time",
+          "days": "Starting weekdays",
+          "import_rate": "Import price per kWh",
+          "export_rate": "Export payment per kWh"
+        }
+      },
+      "edit_band": {
+        "title": "Choose a time band",
+        "data": {
+          "band": "Time band"
+        }
+      },
+      "remove_band": {
+        "title": "Remove time bands",
+        "data": {
+          "bands": "Time bands to remove"
+        }
+      }
+    },
+    "error": {
+      "invalid_meter": "Choose a non-SolarCost cumulative energy sensor with Wh, kWh or MWh units and a total or total_increasing state class.",
+      "duplicate_meter": "Use a different sensor for each energy source.",
+      "invalid_currency": "Enter a three-letter currency code, such as EUR, GBP or USD.",
+      "invalid_name": "Enter a name.",
+      "invalid_tariff": "Enter finite rates, non-negative fixed charges, and percentages between 0 and 100.",
+      "invalid_band": "Check the unique name, weekdays and whole-minute times. Bands cannot overlap, start and end must differ, and at most 48 bands are allowed."
+    }
+  },
+  "options": {
+    "step": {
+      "rates": {
+        "title": "Rates and reporting periods",
+        "description": "Prices include VAT by default. Enter {currency} per kWh (30 cents = 0.30). Standing charges and monthly levies are optional; leave them at 0 if unused. Only set the optional VAT adjustment when entering tax-exclusive prices. It applies to imports and fixed charges, never export credit. The discount applies only to imported energy. Last N months/years includes the current partial calendar period.",
+        "data": {
+          "import_rate": "Base import price per kWh",
+          "export_rate": "Base export payment per kWh",
+          "standing_charge": "Daily standing charge (optional)",
+          "last_months": "Number of months to track",
+          "last_years": "Number of years to track",
+          "monthly_charge": "Monthly levy / fixed charge (optional)",
+          "vat_percent": "Extra VAT for tax-exclusive prices (optional, %)",
+          "discount_percent": "Import energy discount (optional, %)"
+        }
+      },
+      "bands": {
+        "title": "Time-of-use bands",
+        "description": "{bands}\n\nAdd as many non-overlapping bands as you need (up to 48), then Save.",
+        "menu_options": {
+          "add_band": "Add a time band",
+          "edit_band": "Edit a time band",
+          "remove_band": "Remove time bands",
+          "init": "Back to settings",
+          "save": "Save"
+        }
+      },
+      "band": {
+        "title": "Time-of-use band",
+        "description": "Rates are in {currency} per kWh. Use whole minutes. Overnight bands belong to their starting weekday. Start is inclusive; end is exclusive. Both repeated daylight-saving hours use the same wall-clock tariff.",
+        "data": {
+          "name": "Band name",
+          "start": "Start time",
+          "end": "End time",
+          "days": "Starting weekdays",
+          "import_rate": "Import price per kWh",
+          "export_rate": "Export payment per kWh"
+        }
+      },
+      "edit_band": {
+        "title": "Choose a time band",
+        "data": {
+          "band": "Time band"
+        }
+      },
+      "remove_band": {
+        "title": "Remove time bands",
+        "data": {
+          "bands": "Time bands to remove"
+        }
+      },
+      "init": {
+        "title": "SolarCost settings",
+        "description": "Saved rate changes apply from reload onward. Existing charges are preserved. Changing a meter establishes a new baseline for that source.",
+        "menu_options": {
+          "rates": "Rates and reporting periods",
+          "bands": "Time-of-use bands",
+          "meters": "Energy meters",
+          "save": "Save changes"
+        }
+      },
+      "meters": {
+        "title": "Energy meters",
+        "description": "Use separate cumulative energy sensors. Changing a source keeps recorded totals and establishes a new baseline.",
+        "data": {
+          "solar_sensor": "Solar generation energy meter",
+          "usage_sensor": "Home consumption energy meter",
+          "import_sensor": "Grid import energy meter",
+          "export_sensor": "Grid export energy meter"
+        }
+      }
+    },
+    "error": {
+      "invalid_meter": "Choose a non-SolarCost cumulative energy sensor with Wh, kWh or MWh units and a total or total_increasing state class.",
+      "duplicate_meter": "Use a different sensor for each energy source.",
+      "invalid_currency": "Enter a three-letter currency code, such as EUR, GBP or USD.",
+      "invalid_name": "Enter a name.",
+      "invalid_tariff": "Enter finite rates, non-negative fixed charges, and percentages between 0 and 100.",
+      "invalid_band": "Check the unique name, weekdays and whole-minute times. Bands cannot overlap, start and end must differ, and at most 48 bands are allowed."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "solar_kwh": {
+        "name": "{period} solar generation"
+      },
+      "usage_kwh": {
+        "name": "{period} energy usage"
+      },
+      "import_kwh": {
+        "name": "{period} grid import"
+      },
+      "export_kwh": {
+        "name": "{period} grid export"
+      },
+      "import_cost": {
+        "name": "{period} import cost"
+      },
+      "export_credit": {
+        "name": "{period} export credit"
+      },
+      "standing_charge": {
+        "name": "{period} standing charges"
+      },
+      "net_cost": {
+        "name": "{period} estimated bill"
+      },
+      "import_rate": {
+        "name": "Current import rate"
+      },
+      "export_rate": {
+        "name": "Current export rate"
+      },
+      "fixed_charge": {
+        "name": "{period} monthly fixed charges"
+      }
+    }
+  },
+  "services": {
+    "get_report": {
+      "name": "Get bill report",
+      "description": "Return energy and estimated charges for inclusive local dates, grouped by day, Monday-based week, month or year. Only recorded history is included.",
+      "fields": {
+        "config_entry_id": {
+          "name": "SolarCost integration",
+          "description": "The ledger to query."
+        },
+        "start": {
+          "name": "Start date",
+          "description": "First local calendar date, inclusive."
+        },
+        "end": {
+          "name": "End date",
+          "description": "Last local calendar date, inclusive; today or earlier."
+        },
+        "group_by": {
+          "name": "Group by",
+          "description": "Report interval."
+        }
+      }
+    }
+  }
+}
