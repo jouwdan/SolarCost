@@ -1,5 +1,12 @@
 name: Validate
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+  schedule:
+    - cron: "17 6 * * 1"
 permissions:
   contents: read
 jobs:
@@ -17,6 +24,16 @@ jobs:
         with:
           node-version: "22"
       - run: node tests/test_card.mjs
+      - name: Build installable integration
+        run: git archive --format=zip --output=solarcost.zip --add-file=LICENSE HEAD:custom_components/solarcost
+      - name: Check release archive
+        run: python tests/check_release.py solarcost.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solarcost-integration
+          path: solarcost.zip
+          if-no-files-found: error
+          retention-days: 7
   home-assistant:
     runs-on: ubuntu-latest
     steps:
@@ -29,3 +46,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: HACS validation
+        uses: hacs/action@main
+        env:
+          # Validate this revision even during a manual release or scheduled run.
+          REPOSITORY_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        with:
+          category: integration
+          comment: false

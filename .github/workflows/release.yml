@@ -1,0 +1,67 @@
+name: Release
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solarcost-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/validate.yml
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: solarcost-integration
+      - name: Verify version and tag
+        id: version
+        shell: bash
+        run: |
+          python tests/check_release.py solarcost.zip
+          version="$(jq -r '.version' custom_components/solarcost/manifest.json)"
+          tag="v$version"
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
+            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          sha256sum solarcost.zip > solarcost.zip.sha256
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          SolarCost tracks solar generation, home consumption, grid import/export, time-of-use costs and bill estimates, with an interactive Home Assistant dashboard card and visual editor.
+
+          Requires Home Assistant $(jq -r '.homeassistant' hacs.json) or later.
+
+          **HACS:** add **$GITHUB_REPOSITORY** as an Integration custom repository, then download this release. The dashboard card is included.
+
+          **Manual install:** extract **solarcost.zip** directly into **config/custom_components/solarcost/**.
+
+          After installing or updating, restart Home Assistant and refresh the dashboard browser. Existing SolarCost settings and history are preserved. Back up Home Assistant before updating.
+
+          [Installation and setup](https://github.com/$GITHUB_REPOSITORY/blob/$RELEASE_TAG/README.md) · [Successful validation](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
+
+          Built from commit $GITHUB_SHA after accounting, card, archive, Home Assistant lifecycle, Hassfest and HACS checks passed.
+          EOF
+          gh release create "$RELEASE_TAG" solarcost.zip solarcost.zip.sha256 \
+            --target "$GITHUB_SHA" --title "SolarCost $RELEASE_VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes
