@@ -139,6 +139,7 @@ For each period, SolarCost provides solar generation, energy usage, grid import,
 | Today | Local midnight to now |
 | This week | Monday midnight to now |
 | This month | First day of this month to now |
+| Last month | First through last day of the previous calendar month |
 | Last N months | First day of the month N−1 months ago to now |
 | This year | January 1 to now |
 | Last N years | January 1 of the year N−1 years ago to now |
@@ -146,15 +147,19 @@ For each period, SolarCost provides solar generation, energy usage, grid import,
 
 Last N months and Last N years include the current partial calendar period. For example, Last 3 months during September includes July, August and September so far. They are not fixed 30-day or 365-day windows.
 
+**Last month** is a separate completed calendar month. If you are billed every two months, you can compare it with **This month**, or set **Number of months to track** to `2` for a combined previous-and-current-month total. Use a date-range report when your supplier's billing dates differ from calendar months.
+
 ```text
 Estimated bill = import cost + standing charges + monthly fixed charges − export credit
 ```
 
 A **negative estimated bill means net credit**. Amounts include the configured discount and VAT adjustment. Standing charges accrue through each day; monthly charges accrue across the actual days in each month. Setup partway through a day or month only includes charges from the tracking start time.
 
-The **Current import rate** sensor shows the active import price after configured discounts and VAT. **Current export rate** shows the active export payment. Together with the period sensors, SolarCost creates 65 sensors per setup.
+The **Current import rate** sensor shows the active import price after configured discounts and VAT. **Current export rate** shows the active export payment. Together with the period sensors, SolarCost creates 74 sensors per setup.
 
 Open a bill sensor's attributes to see its cost breakdown, tracking start and meter status. `partial_history: true` means that the requested period starts before SolarCost began recording. Weekly, monthly and yearly totals may therefore match when you first install it.
+
+If a period ends before tracking began, its sensors show **Unknown** and `has_history: false`. For example, Last month has no history immediately after installation. Once a month has been recorded, the Last month sensors update automatically at the start of the next month. A partly recorded month shows its available totals with `partial_history: true`.
 
 ## Change tariffs or meters
 

@@ -163,6 +163,7 @@ def period_starts(today, months, years):
         "today": today,
         "week": today - timedelta(days=today.weekday()),
         "month": today.replace(day=1),
+        "last_month": (today.replace(day=1) - timedelta(days=1)).replace(day=1),
         "last_months": date(month_index // 12, month_index % 12 + 1, 1),
         "year": today.replace(month=1, day=1),
         "last_years": date(today.year - years + 1, 1, 1),
@@ -350,10 +351,13 @@ class Ledger:
             since = datetime.fromtimestamp(float(meta["since"]), self.zone)
             periods = {}
             for period, start in period_starts(today, months, years).items():
+                end = today.replace(day=1) - timedelta(days=1) if period == "last_month" else today
+                has_history = since.date() <= end
                 periods[period] = {
-                    **self.aggregate(db, start, today),
-                    "start": max(start, since.date()).isoformat(),
-                    "end": today.isoformat(),
+                    **self.aggregate(db, start, end),
+                    "start": (max(start, since.date()) if has_history else start).isoformat(),
+                    "end": end.isoformat(),
+                    "has_history": has_history,
                     "partial_history": period != "all_time"
                     and midnight(start, self.zone) < float(meta["since"]),
                 }

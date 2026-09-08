@@ -5,7 +5,7 @@ import sys
 import tempfile
 import types
 import unittest
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -215,6 +215,7 @@ class AccountingTest(unittest.TestCase):
     def test_calendar_ranges_and_long_history(self):
         starts = period_starts(date(2028, 2, 29), 12, 5)
         self.assertEqual(starts["last_months"], date(2027, 3, 1))
+        self.assertEqual(starts["last_month"], date(2028, 1, 1))
         self.assertEqual(starts["last_years"], date(2024, 1, 1))
         self.assertEqual(starts["week"], date(2028, 2, 28))
         end = timestamp("2036-01-01T00:00:00")
@@ -228,6 +229,49 @@ class AccountingTest(unittest.TestCase):
         self.assertTrue(
             self.ledger.snapshot(end, 1200, 100)["periods"]["last_years"]["partial_history"]
         )
+
+    def test_last_month_excludes_current_month_across_calendar_boundaries(self):
+        zone = ZoneInfo("Europe/Dublin")
+        for current in (date(2027, 1, 1), date(2028, 3, 1), date(2026, 4, 1)):
+            with self.subTest(current=current):
+                previous_end = current - timedelta(days=1)
+                previous_start = previous_end.replace(day=1)
+                start = datetime(
+                    previous_start.year, previous_start.month, 1, tzinfo=zone
+                ).timestamp()
+                boundary = datetime(current.year, current.month, 1, tzinfo=zone).timestamp()
+                ledger = Ledger(Path(self.temp.name) / f"month-{current}.db", zone.key, "EUR")
+                ledger.initialize(start)
+                ledger.update(BASE, [sample("import", 0, start)], start)
+                ledger.update(BASE, [sample("import", 10, boundary)], boundary)
+                now = boundary + 86400
+                ledger.update(BASE, [sample("import", 110, now)], now)
+                periods = ledger.snapshot(now, 12, 5)["periods"]
+                previous = periods["last_month"]
+                self.assertEqual(previous["start"], previous_start.isoformat())
+                self.assertEqual(previous["end"], previous_end.isoformat())
+                self.assertAlmostEqual(previous["import_kwh"], 10)
+                self.assertAlmostEqual(previous["net_cost"], 3 + previous_end.day * 0.6)
+                self.assertAlmostEqual(periods["month"]["import_kwh"], 100)
+                self.assertTrue(previous["has_history"])
+                self.assertFalse(previous["partial_history"])
+
+    def test_last_month_missing_and_partial_history(self):
+        previous = self.ledger.snapshot(self.start, 12, 5)["periods"]["last_month"]
+        self.assertEqual((previous["start"], previous["end"]), ("2025-12-01", "2025-12-31"))
+        self.assertFalse(previous["has_history"])
+        self.assertTrue(previous["partial_history"])
+        start = timestamp("2026-01-15T00:00:00")
+        end = timestamp("2026-02-01T00:00:00")
+        ledger = Ledger(Path(self.temp.name) / "partial-month.db", "Europe/Dublin", "EUR")
+        ledger.initialize(start)
+        ledger.update(BASE, [sample("import", 0, start)], start)
+        ledger.update(BASE, [sample("import", 1, end)], end)
+        previous = ledger.snapshot(end, 12, 5)["periods"]["last_month"]
+        self.assertEqual((previous["start"], previous["end"]), ("2026-01-15", "2026-01-31"))
+        self.assertTrue(previous["has_history"])
+        self.assertTrue(previous["partial_history"])
+        self.assertAlmostEqual(previous["net_cost"], 0.3 + 17 * 0.6)
 
     def test_vat_discount_and_calendar_month_levy(self):
         config = {

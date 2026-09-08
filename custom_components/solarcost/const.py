@@ -5,7 +5,7 @@ SOURCES = ("solar", "usage", "import", "export")
 ENERGY = tuple(f"{source}_kwh" for source in SOURCES)
 MONEY = ("import_cost", "export_credit", "standing_charge", "fixed_charge", "net_cost")
 METRICS = ENERGY + MONEY
-PERIODS = ("today", "week", "month", "last_months", "year", "last_years", "all_time")
+PERIODS = ("today", "week", "month", "last_month", "last_months", "year", "last_years", "all_time")
 DEFAULTS = {
     "import_rate": 0.0,
     "export_rate": 0.0,

@@ -44,6 +44,8 @@ cards:
         name: This week
       - entity: sensor.solarcost_this_month_estimated_bill
         name: This month
+      - entity: sensor.solarcost_last_month_estimated_bill
+        name: Last month
       - entity: sensor.solarcost_last_12_months_estimated_bill
         name: Last 12 months
       - entity: sensor.solarcost_this_year_estimated_bill

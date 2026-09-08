@@ -10,6 +10,7 @@ PERIOD_NAMES = {
     "today": "Today",
     "week": "This week",
     "month": "This month",
+    "last_month": "Last month",
     "last_months": "Last {last_months} months",
     "year": "This year",
     "last_years": "Last {last_years} years",
@@ -75,7 +76,8 @@ class SolarCostSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         if self.period == "current":
             return self.coordinator.data["rates"][0 if self.metric == "import_rate" else 1]
-        return round(self.coordinator.data["periods"][self.period][self.metric], 6)
+        period = self.coordinator.data["periods"][self.period]
+        return round(period[self.metric], 6) if period["has_history"] else None
 
     @property
     def extra_state_attributes(self):
@@ -83,7 +85,9 @@ class SolarCostSensor(CoordinatorEntity, SensorEntity):
             return {"time_zone": self.coordinator.settings["time_zone"]}
         data = self.coordinator.data
         period = data["periods"][self.period]
-        attributes = {key: period[key] for key in ("start", "end", "partial_history")}
+        attributes = {
+            key: period[key] for key in ("start", "end", "partial_history", "has_history")
+        }
         attributes["tracking_since"] = data["since"]
         if self.metric == "net_cost":
             attributes.update({key: round(period[key], 6) for key in METRICS if key != "net_cost"})

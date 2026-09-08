@@ -138,10 +138,15 @@ async def main():
                 for state in hass.states.async_all("sensor")
                 if state.entity_id.startswith("sensor.solarcost_test_")
             ]
-            assert len(entities) == 65, [
+            assert len(entities) == 74, [
                 (state.entity_id, state.state) for state in hass.states.async_all("sensor")
             ]
-            assert all(state.state not in ("unknown", "unavailable") for state in entities)
+            for state in entities:
+                if state.entity_id.startswith("sensor.solarcost_test_last_month_"):
+                    assert state.state == "unknown", state
+                    assert state.attributes["has_history"] is False, state
+                else:
+                    assert state.state not in ("unknown", "unavailable"), state
             assert any(
                 state.attributes.get("friendly_name") == "SolarCost Test Today estimated bill"
                 for state in entities
@@ -180,7 +185,7 @@ async def main():
             assert entry.runtime_data.data["periods"]["all_time"]["import_kwh"] == 125
             assert await hass.config_entries.async_unload(entry.entry_id)
             print(
-                "PASS: fractional power helpers, grid direction, setup, 65 translated sensors, energy/cost updates, reports, queued reset, reload persistence, options and unload"
+                "PASS: fractional power helpers, grid direction, setup, 74 translated sensors, last-month history, energy/cost updates, reports, queued reset, reload persistence, options and unload"
             )
         finally:
             await hass.async_stop()
