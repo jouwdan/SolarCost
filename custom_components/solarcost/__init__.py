@@ -2,13 +2,17 @@
 
 import sqlite3
 from datetime import date, datetime
+from pathlib import Path
 
 import voluptuous as vol
+from homeassistant.components import frontend
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.loader import async_get_integration
 
 from .const import DOMAIN
 from .coordinator import SolarCostCoordinator
@@ -19,6 +23,12 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 async def async_setup(hass, config):
     """Expose date-range billing reports, including when no entry is loaded."""
+    integration = await async_get_integration(hass, DOMAIN)
+    card_url = "/solarcost/solarcost-tou-card.js"
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(card_url, str(Path(__file__).parent / "solarcost-tou-card.js"), False)]
+    )
+    frontend.add_extra_js_url(hass, f"{card_url}?v={integration.version}")
 
     async def get_report(call):
         entry = hass.config_entries.async_get_entry(call.data["config_entry_id"])

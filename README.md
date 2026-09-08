@@ -120,7 +120,7 @@ Replace these example prices and times with your own tariff. SolarCost starts tr
 
 ## Add the dashboard card
 
-The included [card template](custom_components/solarcost/card.yaml) displays today's bill, solar generation, household usage, grid import/export, bill totals for every reporting period, charges, current rates, import costs by time band and a monthly energy chart. It uses built-in Home Assistant cards; no additional card plugins are required.
+The included [card template](custom_components/solarcost/card.yaml) displays today's bill, solar generation, household usage, grid import/export, bill totals for every reporting period, charges, current rates, import costs by time band and a monthly energy chart. The compact time-of-use chart is bundled with SolarCost and loads automatically; the remaining cards are built into Home Assistant. No separate card plugins are required.
 
 1. Open the [card.yaml template](custom_components/solarcost/card.yaml) and copy its contents. It is also included in the installed integration at `custom_components/solarcost/card.yaml`.
 2. Open your dashboard and choose **Edit → Add card → By card → Manual**.
@@ -161,7 +161,18 @@ The **Current import rate** sensor shows the active import price after configure
 
 Every **Import cost** and **Estimated bill** sensor includes a `time_of_use` attribute with imported kWh and cost for each configured band, such as EV, Night or Peak. `base` means the price outside your time bands (often Day); named bands use keys such as `band:EV`. Costs include the discount and VAT applied when the energy was recorded. Export credit, standing charges and monthly fees remain separate.
 
-The dashboard template displays the breakdown for today, this month and last month. To display another reporting window, change the entity in that markdown card to the corresponding import-cost sensor. The same breakdown is available for every built-in reporting window and in date-range reports. Existing dashboards need the new markdown card copied from the template after upgrading.
+The dashboard shows one reporting period at a time, with **This month** selected initially and buttons for **Today** and **Last month**. Horizontal bars compare each band's cost, with euro amounts (or your configured currency) alongside them. Bands without imported energy stay out of the chart; expand **Energy details** to see kWh for every band. Negative import costs keep their minus sign, and bar lengths compare absolute amounts.
+
+To show another reporting window, add its import-cost sensor to the card's `entities` list. The first entity is selected initially. Replace the old markdown breakdown with the `custom:solarcost-tou-card` block from the updated template, restart Home Assistant after upgrading, and refresh your browser. The chart loads automatically with the integration.
+
+Optionally add `band_names` to the chart configuration to relabel or combine bands for display. Bands mapped to the same name are added together in the chart; the ledger and reports retain the original bands. For example:
+
+```yaml
+band_names:
+  base: Day
+  "band:Night before EV": Night
+  "band:Night after EV": Night
+```
 
 Band names identify historical buckets: changing a band's rate preserves its previous costs, while renaming or removing a band keeps its recorded amounts under the old name. Separate time bands remain separate rows even if their prices match.
 

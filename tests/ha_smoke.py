@@ -8,8 +8,8 @@ from pathlib import Path
 
 import yaml
 from homeassistant import bootstrap, loader
+from homeassistant.components import frontend
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.template import Template
 from homeassistant.setup import async_setup_component
 
 
@@ -41,6 +41,10 @@ async def main():
                 hass,
             )
             assert await async_setup_component(hass, "solarcost", {})
+            assert any(
+                url.startswith("/solarcost/solarcost-tou-card.js?v=")
+                for url in hass.data[frontend.DATA_EXTRA_MODULE_URL].urls
+            )
             await hass.async_start()
             power_attributes = {
                 "device_class": "power",
@@ -173,13 +177,11 @@ async def main():
             card = next(
                 card
                 for card in dashboard["cards"]
-                if card.get("title") == "Import costs by time band"
+                if card.get("type") == "custom:solarcost-tou-card"
             )
-            rendered = Template(
-                card["content"].replace("sensor.solarcost_", "sensor.solarcost_test_"), hass
-            ).async_render()
-            assert "| Base rate |" in rendered and "| Night |" in rendered, rendered
-            assert "No recorded history for this period." in rendered, rendered
+            for item in card["entities"]:
+                entity = item["entity"].replace("sensor.solarcost_", "sensor.solarcost_test_")
+                assert hass.states.get(entity).attributes["time_of_use"], entity
             # Two rapid updates must preserve the intermediate reset, despite debouncing.
             hass.states.async_set("sensor.test_import", 0, attributes)
             hass.states.async_set("sensor.test_import", 115, attributes)
