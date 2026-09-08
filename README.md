@@ -1,5 +1,9 @@
 # SolarCost
 
+[![Validate](https://github.com/jouwdan/SolarCost/actions/workflows/validate.yml/badge.svg)](https://github.com/jouwdan/SolarCost/actions/workflows/validate.yml)
+[![Release](https://img.shields.io/github/v/release/jouwdan/SolarCost)](https://github.com/jouwdan/SolarCost/releases/latest)
+[![HACS custom integration](https://img.shields.io/badge/HACS-Custom_Integration-41BDF5)](https://www.hacs.xyz/docs/faq/custom_repositories/)
+
 <img src="custom_components/solarcost/brand/icon.png" alt="SolarCost sun and lightning icon" width="96" height="96">
 
 SolarCost estimates electricity bills in Home Assistant using solar generation, household consumption, grid import and grid export. Enter your electricity tariff to track energy costs, export credit and optional fixed charges across daily, weekly, monthly and yearly periods.
@@ -19,21 +23,25 @@ SolarCost is a **custom integration compatible with HACS**. It runs locally insi
 
 ### Install with HACS
 
+Until SolarCost is included in the HACS default list, add it as a custom repository. The integration and dashboard card are distributed together.
+
 1. Open **HACS → ⋮ → Custom repositories**.
-2. Add `https://github.com/jouwdan/solarcost` with the category **Integration**.
-3. Find **SolarCost** in HACS and download it.
+2. Add `https://github.com/jouwdan/SolarCost` with the category **Integration**.
+3. Find **SolarCost** in HACS and download the latest release.
 4. Restart Home Assistant.
 5. Open **Settings → Devices & services → Add integration** and search for **SolarCost**.
 6. Follow the setup steps below.
 
 ### Install manually
 
-1. Download and extract the SolarCost repository or release archive.
-2. Copy the `custom_components/solarcost` folder into the `custom_components` folder in your Home Assistant configuration directory. Create `custom_components` if it does not exist.
+1. Download **solarcost.zip** from the [latest release](https://github.com/jouwdan/SolarCost/releases/latest).
+2. Create `custom_components/solarcost` in your Home Assistant configuration directory and extract the ZIP's contents directly into it.
 3. Check that the resulting path is `custom_components/solarcost/manifest.json`, without an extra nested `solarcost` folder.
 4. Restart Home Assistant, then open **Settings → Devices & services → Add integration → SolarCost**.
 
 No `configuration.yaml` entry is needed.
+
+If you download GitHub's **Source code** archive instead, copy its `custom_components/solarcost` folder into your configuration's `custom_components` folder. The attached `solarcost.zip` contains only the integration files, with `manifest.json` at the ZIP root.
 
 ## Initial setup
 
@@ -255,7 +263,7 @@ SolarCost keeps its own daily history independently of Home Assistant's Recorder
 
 ## Updates and backups
 
-For HACS installations, install updates through HACS and restart Home Assistant. For manual installations, replace the integration files with the new version and restart.
+Published [GitHub releases](https://github.com/jouwdan/SolarCost/releases) are the update source for HACS. For HACS installations, install updates through HACS and restart Home Assistant. For manual installations, replace the integration files with the new version and restart. Refresh dashboard browsers to load the matching card version. You do not need to remove or re-add the integration.
 
 Include the `solarcost` folder in your Home Assistant configuration directory in backups. Its databases are stored as `solarcost/<config_entry_id>.db`. For a manual file copy, stop Home Assistant first so the database is not being written during the copy.
 
@@ -276,7 +284,11 @@ Removing the integration does not delete its stored history. Adding it again cre
 | The active rate looks wrong | Check the local time zone, selected weekdays and band boundaries. The current import rate already includes configured discounts and VAT. |
 | VAT or a discount appears to be applied twice | Leave the corresponding adjustment at `0` if it is already included in the prices you entered. |
 
-For problems that remain, check **Settings → System → Logs** and [open an issue](https://github.com/jouwdan/solarcost/issues). Include your Home Assistant and SolarCost versions, the steps to reproduce the problem, and relevant logs with credentials and personal details removed.
+For problems that remain, check **Settings → System → Logs** and [open an issue](https://github.com/jouwdan/SolarCost/issues). Include your Home Assistant and SolarCost versions, the steps to reproduce the problem, and relevant logs with credentials and personal details removed.
+
+## Contributing and releases
+
+Pull requests run accounting and card tests, an installable-archive check, a Home Assistant lifecycle test, Hassfest and HACS validation. The same checks run weekly and before every release. See the [maintainer guide](docs/RELEASING.md) for local checks, the one-click release process, deployment and rollback, and submission to the HACS default list.
 
 ## License
 
