@@ -4,10 +4,10 @@
   "codeowners": ["@jouwdan"],
   "config_flow": true,
   "dependencies": ["frontend", "http"],
-  "documentation": "https://github.com/jouwdan/solarcost",
+  "documentation": "https://github.com/jouwdan/SolarCost",
   "integration_type": "service",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/jouwdan/solarcost/issues",
+  "issue_tracker": "https://github.com/jouwdan/SolarCost/issues",
   "requirements": [],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
