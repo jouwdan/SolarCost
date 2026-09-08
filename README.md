@@ -120,7 +120,7 @@ Replace these example prices and times with your own tariff. SolarCost starts tr
 
 ## Add the dashboard card
 
-The included [card template](custom_components/solarcost/card.yaml) displays today's bill, solar generation, household usage, grid import/export, bill totals for every reporting period, charges, current rates and a monthly energy chart. It uses built-in Home Assistant cards; no additional card plugins are required.
+The included [card template](custom_components/solarcost/card.yaml) displays today's bill, solar generation, household usage, grid import/export, bill totals for every reporting period, charges, current rates, import costs by time band and a monthly energy chart. It uses built-in Home Assistant cards; no additional card plugins are required.
 
 1. Open the [card.yaml template](custom_components/solarcost/card.yaml) and copy its contents. It is also included in the installed integration at `custom_components/solarcost/card.yaml`.
 2. Open your dashboard and choose **Edit → Add card → By card → Manual**.
@@ -157,6 +157,16 @@ A **negative estimated bill means net credit**. Amounts include the configured d
 
 The **Current import rate** sensor shows the active import price after configured discounts and VAT. **Current export rate** shows the active export payment. Together with the period sensors, SolarCost creates 74 sensors per setup.
 
+### Costs by time-of-use band
+
+Every **Import cost** and **Estimated bill** sensor includes a `time_of_use` attribute with imported kWh and cost for each configured band, such as EV, Night or Peak. `base` means the price outside your time bands (often Day); named bands use keys such as `band:EV`. Costs include the discount and VAT applied when the energy was recorded. Export credit, standing charges and monthly fees remain separate.
+
+The dashboard template displays the breakdown for today, this month and last month. To display another reporting window, change the entity in that markdown card to the corresponding import-cost sensor. The same breakdown is available for every built-in reporting window and in date-range reports. Existing dashboards need the new markdown card copied from the template after upgrading.
+
+Band names identify historical buckets: changing a band's rate preserves its previous costs, while renaming or removing a band keeps its recorded amounts under the old name. Separate time bands remain separate rows even if their prices match.
+
+Time-band detail starts when version 0.1.3 or later first runs. Earlier imported energy and costs remain in an **Unallocated** row because older daily totals contain no time-band detail; they are never repriced or guessed. The `time_of_use_since` attribute shows when detailed tracking started. These breakdowns are stored in SolarCost's daily ledger rather than Home Assistant Recorder attributes, keeping long-term storage proportional to days and bands rather than meter updates.
+
 Open a bill sensor's attributes to see its cost breakdown, tracking start and meter status. `partial_history: true` means that the requested period starts before SolarCost began recording. Weekly, monthly and yearly totals may therefore match when you first install it.
 
 If a period ends before tracking began, its sensors show **Unknown** and `has_history: false`. For example, Last month has no history immediately after installation. Once a month has been recorded, the Last month sensors update automatically at the start of the next month. A partly recorded month shows its available totals with `partial_history: true`.
@@ -178,7 +188,7 @@ Use the **SolarCost: Get bill report** action to check a supplier's billing peri
 3. Enter the start and end dates. Both dates are included, in the ledger's local time zone.
 4. Choose grouping by **day**, **week**, **month** or **year**, then perform the action.
 
-The response contains totals, a breakdown for each grouped period, currency, time zone, tracking start and partial-history information. Weeks start on Monday. The end date must be today or earlier, and a request can cover up to 100 years. Only data recorded since setup is available; a report ending today includes charges recorded so far.
+The response contains totals, a breakdown for each grouped period, currency, time zone, tracking start and partial-history information. `time_of_use` contains imported kWh and costs by band for the full date range and each grouped period. Weeks start on Monday. The end date must be today or earlier, and a request can cover up to 100 years. Only data recorded since setup is available; a report ending today includes charges recorded so far.
 
 For an automation, use an action such as:
 

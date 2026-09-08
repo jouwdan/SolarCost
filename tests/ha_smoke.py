@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 from homeassistant import bootstrap, loader
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.template import Template
 from homeassistant.setup import async_setup_component
 
 
@@ -160,6 +161,25 @@ async def main():
                 return_response=True,
             )
             assert report["totals"]["import_kwh"] == 10, report
+            assert (
+                abs(sum(band["import_cost"] for band in report["time_of_use"].values()) - 3) < 1e-6
+            )
+            imported = hass.states.get("sensor.solarcost_test_today_import_cost")
+            assert imported.attributes["time_of_use"] == report["time_of_use"], imported
+            assert imported.attributes["time_of_use_since"], imported
+            dashboard = yaml.safe_load(
+                (Path(directory) / "custom_components/solarcost/card.yaml").read_text()
+            )
+            card = next(
+                card
+                for card in dashboard["cards"]
+                if card.get("title") == "Import costs by time band"
+            )
+            rendered = Template(
+                card["content"].replace("sensor.solarcost_", "sensor.solarcost_test_"), hass
+            ).async_render()
+            assert "| Base rate |" in rendered and "| Night |" in rendered, rendered
+            assert "No recorded history for this period." in rendered, rendered
             # Two rapid updates must preserve the intermediate reset, despite debouncing.
             hass.states.async_set("sensor.test_import", 0, attributes)
             hass.states.async_set("sensor.test_import", 115, attributes)
@@ -185,7 +205,7 @@ async def main():
             assert entry.runtime_data.data["periods"]["all_time"]["import_kwh"] == 125
             assert await hass.config_entries.async_unload(entry.entry_id)
             print(
-                "PASS: fractional power helpers, grid direction, setup, 74 translated sensors, last-month history, energy/cost updates, reports, queued reset, reload persistence, options and unload"
+                "PASS: fractional power helpers, grid direction, setup, 74 translated sensors, last-month history, time-band costs and card template, reports, queued reset, reload persistence, options and unload"
             )
         finally:
             await hass.async_stop()

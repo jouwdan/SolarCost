@@ -76,7 +76,7 @@ def validate_tariff(config):
         raise ValueError("Time bands overlap")
 
 
-def rates_at(config, local):
+def tariff_at(config, local):
     """An overnight band's selected weekday is the day it starts."""
     at = local.hour * 60 + local.minute
     multiplier = (1 - float(config.get("discount_percent", 0)) / 100) * (
@@ -89,8 +89,16 @@ def rates_at(config, local):
             weekday = (weekday - 1) % 7
         active = start <= at < end if start < end else at >= start or at < end
         if active and str(weekday) in {str(day) for day in band["days"]}:
-            return float(band["import_rate"]) * multiplier, float(band["export_rate"])
-    return float(config["import_rate"]) * multiplier, float(config["export_rate"])
+            return (
+                float(band["import_rate"]) * multiplier,
+                float(band["export_rate"]),
+                f"band:{band['name']}",
+            )
+    return float(config["import_rate"]) * multiplier, float(config["export_rate"]), "base"
+
+
+def rates_at(config, local):
+    return tariff_at(config, local)[:2]
 
 
 def midnight(day, zone):
@@ -142,7 +150,7 @@ def segments(start, end, zone, versions):
         for begin, finish in zip(points, points[1:]):
             middle = (begin + finish) / 2
             config = versions[max(0, bisect_right(effective, middle) - 1)][1]
-            import_rate, export_rate = rates_at(config, datetime.fromtimestamp(middle, zone))
+            import_rate, export_rate, band = tariff_at(config, datetime.fromtimestamp(middle, zone))
             tax = 1 + float(config.get("vat_percent", 0)) / 100
             yield (
                 day.isoformat(),
@@ -152,6 +160,7 @@ def segments(start, end, zone, versions):
                 export_rate,
                 float(config["standing_charge"]) * tax,
                 float(config.get("monthly_charge", 0)) * tax / monthrange(day.year, day.month)[1],
+                band,
             )
         day = next_day
 
@@ -183,7 +192,7 @@ def totals(row):
 
 
 class Ledger:
-    """One indexed row per day, plus four meter checkpoints and tariff history."""
+    """Indexed daily totals and time bands, meter checkpoints and tariff history."""
 
     def __init__(self, path, time_zone, currency):
         self.path = Path(path)
@@ -205,7 +214,7 @@ class Ledger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise ValueError(
                     "Unsupported SolarCost database version; restore a compatible integration"
                 )
@@ -223,17 +232,29 @@ class Ledger:
                 + ", ".join(f"{key} REAL NOT NULL DEFAULT 0" for key in COLUMNS)
                 + ")"
             )
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS daily_tou (day TEXT NOT NULL, band TEXT NOT NULL, "
+                "import_kwh REAL NOT NULL DEFAULT 0, import_cost REAL NOT NULL DEFAULT 0, "
+                "PRIMARY KEY (day, band))"
+            )
+            if version < 2:
+                # Older daily totals cannot be reconstructed into individual time bands.
+                db.execute(
+                    "INSERT INTO daily_tou SELECT day, 'unallocated', import_kwh, import_cost "
+                    "FROM daily WHERE import_kwh != 0 OR import_cost != 0"
+                )
             for key, value in {
                 "since": str(now),
                 "standing_until": str(now),
                 "time_zone": self.zone.key,
                 "currency": self.currency,
+                "time_of_use_since": str(now),
             }.items():
                 db.execute("INSERT OR IGNORE INTO meta VALUES (?, ?)", (key, value))
             meta = dict(db.execute("SELECT key, value FROM meta"))
             if meta["time_zone"] != self.zone.key or meta["currency"] != self.currency:
                 raise ValueError("Existing ledger has a different currency or time zone")
-            db.execute("PRAGMA user_version=1")
+            db.execute("PRAGMA user_version=2")
 
     @staticmethod
     def add(db, day, values):
@@ -280,7 +301,7 @@ class Ledger:
                 db.execute("SELECT value FROM meta WHERE key='standing_until'").fetchone()[0]
             )
             if now > standing_until:
-                for day, seconds, day_seconds, _, _, standing, fixed in segments(
+                for day, seconds, day_seconds, _, _, standing, fixed, _ in segments(
                     standing_until, now, self.zone, versions
                 ):
                     self.add(
@@ -319,13 +340,21 @@ class Ledger:
                         start = reset_at
                 if not correction:
                     # ponytail: uniform use between readings; use interval meters for exact TOU allocation.
-                    for day, seconds, _, import_rate, export_rate, _, _ in segments(
+                    for day, seconds, _, import_rate, export_rate, _, _, band in segments(
                         start, at, self.zone, versions
                     ):
                         energy = delta * seconds / (at - start)
                         values = {f"{source}_kwh": energy}
                         if source == "import":
                             values["import_cost"] = energy * import_rate
+                            if energy:
+                                db.execute(
+                                    "INSERT INTO daily_tou VALUES (?, ?, ?, ?) "
+                                    "ON CONFLICT(day, band) DO UPDATE SET "
+                                    "import_kwh = import_kwh + excluded.import_kwh, "
+                                    "import_cost = import_cost + excluded.import_cost",
+                                    (day, band, energy, values["import_cost"]),
+                                )
                         elif source == "export":
                             values["export_credit"] = energy * export_rate
                         self.add(db, day, values)
@@ -344,6 +373,35 @@ class Ledger:
         ).fetchone()
         return totals(row)
 
+    @staticmethod
+    def aggregate_tou(db, start, end):
+        config = json.loads(
+            db.execute("SELECT config FROM tariffs ORDER BY effective DESC LIMIT 1").fetchone()[0]
+        )
+        bands = {
+            "base": {"name": "Base rate", "import_kwh": 0.0, "import_cost": 0.0},
+            **{
+                f"band:{band['name']}": {
+                    "name": band["name"],
+                    "import_kwh": 0.0,
+                    "import_cost": 0.0,
+                }
+                for band in config["bands"]
+            },
+        }
+        for row in db.execute(
+            "SELECT band, SUM(import_kwh) AS import_kwh, SUM(import_cost) AS import_cost "
+            "FROM daily_tou WHERE day >= ? AND day <= ? GROUP BY band ORDER BY band",
+            (start.isoformat(), end.isoformat()),
+        ):
+            key = row["band"]
+            bands[key] = {
+                "name": {"base": "Base rate", "unallocated": "Unallocated"}.get(key, key[5:]),
+                "import_kwh": round(row["import_kwh"], 6),
+                "import_cost": round(row["import_cost"], 6),
+            }
+        return bands
+
     def snapshot(self, now, months, years):
         today = datetime.fromtimestamp(now, self.zone).date()
         with self.connection() as db:
@@ -355,6 +413,7 @@ class Ledger:
                 has_history = since.date() <= end
                 periods[period] = {
                     **self.aggregate(db, start, end),
+                    "time_of_use": self.aggregate_tou(db, start, end),
                     "start": (max(start, since.date()) if has_history else start).isoformat(),
                     "end": end.isoformat(),
                     "has_history": has_history,
@@ -369,6 +428,9 @@ class Ledger:
             return {
                 "periods": periods,
                 "since": since.isoformat(),
+                "time_of_use_since": datetime.fromtimestamp(
+                    float(meta["time_of_use_since"]), self.zone
+                ).isoformat(),
                 "updated_at": datetime.fromtimestamp(now, UTC).isoformat(),
                 "rates": rates_at(config, datetime.fromtimestamp(now, self.zone)),
                 "readings": {
@@ -382,6 +444,7 @@ class Ledger:
             raise ValueError("Choose an ordered date range and a valid grouping")
         with self.connection() as db:
             groups = {}
+            group_ranges = {}
             for row in db.execute(
                 "SELECT * FROM daily WHERE day >= ? AND day <= ? ORDER BY day",
                 (start.isoformat(), end.isoformat()),
@@ -394,6 +457,7 @@ class Ledger:
                     "year": str(day.year),
                 }[group_by]
                 group = groups.setdefault(key, dict.fromkeys(COLUMNS, 0.0))
+                group_ranges.setdefault(key, [day, day])[1] = day
                 for column in COLUMNS:
                     group[column] += row[column]
             meta = dict(db.execute("SELECT key, value FROM meta"))
@@ -404,6 +468,10 @@ class Ledger:
                 "currency": self.currency,
                 "time_zone": self.zone.key,
                 "tracking_since": datetime.fromtimestamp(since, self.zone).isoformat(),
+                "time_of_use_since": datetime.fromtimestamp(
+                    float(meta["time_of_use_since"]), self.zone
+                ).isoformat(),
+                "time_of_use": self.aggregate_tou(db, start, end),
                 "partial_history": midnight(start, self.zone) < since,
                 "totals": {
                     key: round(value, 6) for key, value in self.aggregate(db, start, end).items()
@@ -412,6 +480,7 @@ class Ledger:
                     {
                         "period": key,
                         **{metric: round(value, 6) for metric, value in totals(group).items()},
+                        "time_of_use": self.aggregate_tou(db, *group_ranges[key]),
                     }
                     for key, group in groups.items()
                 ],

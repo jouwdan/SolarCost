@@ -35,7 +35,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class SolarCostSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_attribution = "Estimated by SolarCost"
-    _unrecorded_attributes = frozenset({"source_status", "meter_diagnostics", "updated_at"})
+    _unrecorded_attributes = frozenset(
+        {"source_status", "meter_diagnostics", "updated_at", "time_of_use"}
+    )
 
     def __init__(self, coordinator, entry, period, metric):
         super().__init__(coordinator)
@@ -89,6 +91,9 @@ class SolarCostSensor(CoordinatorEntity, SensorEntity):
             key: period[key] for key in ("start", "end", "partial_history", "has_history")
         }
         attributes["tracking_since"] = data["since"]
+        if self.metric in ("import_cost", "net_cost"):
+            attributes["time_of_use"] = period["time_of_use"]
+            attributes["time_of_use_since"] = data["time_of_use_since"]
         if self.metric == "net_cost":
             attributes.update({key: round(period[key], 6) for key in METRICS if key != "net_cost"})
             attributes.update(

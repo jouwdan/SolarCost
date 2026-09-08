@@ -179,9 +179,95 @@ class AccountingTest(unittest.TestCase):
     def test_atomic_rollback(self):
         with self.assertRaises(ValueError):
             self.ledger.update(
-                BASE, [sample("import", float("nan"), self.start + 3600)], self.start + 3600
+                BASE,
+                [
+                    sample("import", 101, self.start + 3600),
+                    sample("solar", float("nan"), self.start + 3600),
+                ],
+                self.start + 3600,
             )
         self.assertEqual(self.total(self.start)["standing_charge"], 0)
+        self.assertEqual(self.total(self.start)["time_of_use"]["base"]["import_kwh"], 0)
+
+    def test_time_of_use_totals_rates_and_calendar_reports(self):
+        start = timestamp("2026-01-31T00:00:00")
+        ledger = Ledger(Path(self.temp.name) / "tou.db", "Europe/Dublin", "EUR")
+        config = {
+            **BASE,
+            "discount_percent": 20,
+            "vat_percent": 9,
+            "bands": [
+                {
+                    "name": name,
+                    "start": left,
+                    "end": right,
+                    "import_rate": price,
+                    "export_rate": 0.15,
+                    "days": [str(day) for day in range(7)],
+                }
+                for name, left, right, price in (
+                    ("Night late", "23:00", "02:00", 0.2),
+                    ("Night early", "06:00", "08:00", 0.2),
+                    ("EV", "02:00", "06:00", 0.1),
+                    ("Peak", "17:00", "19:00", 0.5),
+                )
+            ],
+        }
+        ledger.initialize(start)
+        ledger.update(config, [sample("import", 0, start)], start)
+        boundary = start + 86400
+        ledger.update(config, [sample("import", 24, boundary)], boundary)
+        # Same EV name with a negative new price; a renamed band retains its old bucket.
+        config["bands"][2]["import_rate"] = -0.1
+        config["bands"][3]["name"] = "Rush hour"
+        ledger.update(config, [], boundary)
+        end = boundary + 86400
+        ledger.update(config, [sample("import", 48, end)], end)
+        periods = ledger.snapshot(end, 12, 5)["periods"]
+        previous = periods["last_month"]["time_of_use"]
+        for key, energy, price in (
+            ("base", 13, 0.3),
+            ("band:Night late", 3, 0.2),
+            ("band:Night early", 2, 0.2),
+            ("band:EV", 4, 0.1),
+            ("band:Peak", 2, 0.5),
+        ):
+            self.assertEqual(previous[key]["import_kwh"], energy)
+            self.assertAlmostEqual(previous[key]["import_cost"], energy * price * 0.8 * 1.09)
+        self.assertAlmostEqual(periods["month"]["time_of_use"]["band:EV"]["import_cost"], -0.3488)
+        self.assertEqual(periods["all_time"]["time_of_use"]["band:EV"]["import_cost"], 0)
+        for period in periods.values():
+            for metric in ("import_kwh", "import_cost"):
+                self.assertAlmostEqual(
+                    sum(band[metric] for band in period["time_of_use"].values()), period[metric]
+                )
+        report = ledger.report(date(2026, 1, 31), date(2026, 2, 1), "month")
+        self.assertEqual(report["time_of_use"], periods["all_time"]["time_of_use"])
+        self.assertEqual(report["periods"][0]["time_of_use"], previous)
+        self.assertEqual(report["periods"][1]["time_of_use"], periods["month"]["time_of_use"])
+        self.assertEqual(report["time_of_use"]["band:Rush hour"]["import_kwh"], 2)
+
+    def test_time_of_use_upgrade_preserves_existing_costs_once(self):
+        at = self.start + 3600
+        self.ledger.update(BASE, [sample("import", 102, at)], at)
+        # Recreate the v0.1.2 schema, whose daily totals have no band information.
+        with sqlite3.connect(self.ledger.path) as db:
+            db.execute("DROP TABLE daily_tou")
+            db.execute("DELETE FROM meta WHERE key='time_of_use_since'")
+            db.execute("PRAGMA user_version=1")
+        self.ledger.initialize(at)
+        self.ledger.initialize(at + 1)
+        self.ledger.update(BASE, [sample("import", 103, at + 3600)], at + 3600)
+        result = self.total(at + 3600)
+        self.assertAlmostEqual(result["import_cost"], 0.9)
+        self.assertEqual(
+            result["time_of_use"]["unallocated"],
+            {"name": "Unallocated", "import_kwh": 2.0, "import_cost": 0.6},
+        )
+        self.assertEqual(result["time_of_use"]["base"]["import_kwh"], 1)
+        with sqlite3.connect(self.ledger.path) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM daily_tou").fetchone()[0], 2)
 
     def test_dst_standing_and_missing_tariff_boundary(self):
         zone = ZoneInfo("Europe/Dublin")
@@ -211,6 +297,10 @@ class AccountingTest(unittest.TestCase):
             # Spring: 30 cheap minutes; autumn: 90 cheap minutes across folds.
             self.assertAlmostEqual(result["import_cost"], 4.4)
             self.assertEqual(result["import_kwh"], hours)
+            self.assertAlmostEqual(
+                result["time_of_use"]["band:Cheap"]["import_kwh"],
+                0.5 if hours == 23 else 1.5,
+            )
 
     def test_calendar_ranges_and_long_history(self):
         starts = period_starts(date(2028, 2, 29), 12, 5)

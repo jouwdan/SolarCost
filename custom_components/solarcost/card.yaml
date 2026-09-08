@@ -70,6 +70,26 @@ cards:
         name: Import rate now
       - entity: sensor.solarcost_current_export_rate
         name: Export rate now
+  - type: markdown
+    title: Import costs by time band
+    content: |
+      {% for label, entity in [
+        ('Today', 'sensor.solarcost_today_import_cost'),
+        ('This month', 'sensor.solarcost_this_month_import_cost'),
+        ('Last month', 'sensor.solarcost_last_month_import_cost')
+      ] %}
+      ### {{ label }}
+      {% if has_value(entity) and state_attr(entity, 'time_of_use') is not none %}
+      | Time band | kWh | {{ state_attr(entity, 'unit_of_measurement') }} |
+      | :--- | ---: | ---: |
+      {% for band in state_attr(entity, 'time_of_use').values() -%}
+      | {{ band.name | e | replace('|', '&#124;') | replace('\n', ' ') | replace('\r', ' ') }} | {{ '%.3f' | format(band.import_kwh) }} | {{ '%.2f' | format(band.import_cost) }} |
+      {% endfor %}
+      {% else %}
+      No recorded history for this period.
+      {% endif %}
+      {% endfor %}
+      Import costs include configured discounts and VAT. Fixed charges and export credit are separate. Unallocated amounts predate time-band tracking.
   - type: statistics-graph
     title: Monthly energy
     chart_type: bar
