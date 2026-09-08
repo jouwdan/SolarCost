@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.pytest_cache/
+*.db
+*.db-*
+.DS_Store
+dist/
+.ha-test/
