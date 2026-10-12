@@ -1,4 +1,7 @@
 /* SolarCost's dependency-free time-of-use card. */
+// HA replaces the element registry during startup; wait before defining card classes.
+if (document.querySelector("home-assistant")) await customElements.whenDefined("home-assistant");
+
 export function bandRows(bands, names = {}) {
   const grouped = new Map();
   for (const [key, band] of Object.entries(bands)) {
