@@ -16,4 +16,6 @@ DEFAULTS = {
     "last_months": 12,
     "last_years": 5,
     "bands": [],
+    "tariff_model": "flat",
+    "block_categories": [],
 }

@@ -45,6 +45,55 @@ def validate_tariff(config):
     for key in ("vat_percent", "discount_percent"):
         if finite_number(config.get(key, 0), minimum=0) > 100:
             raise ValueError("Percentages must be between 0 and 100")
+    if config.get("tariff_model", "flat") not in ("flat", "block"):
+        raise ValueError("Unknown tariff model")
+    categories = config.get("block_categories", [])
+    if not isinstance(categories, list) or len(categories) > 48:
+        raise ValueError("Use up to 48 consumption categories")
+    if config.get("tariff_model") == "block" and not categories:
+        raise ValueError("Add at least one consumption category")
+    previous, category_names = 0, set()
+    for index, category in enumerate(categories):
+        if not isinstance(category, dict):
+            raise ValueError("Invalid consumption category")
+        name = category.get("name", "")
+        if (
+            not isinstance(name, str)
+            or not name.strip()
+            or len(name) > 80
+            or name in category_names
+        ):
+            raise ValueError("Category names must be unique and between 1 and 80 characters")
+        category_names.add(name)
+        upper = category.get("up_to")
+        if upper is None:
+            if index != len(categories) - 1:
+                raise ValueError("Only the final category can be unlimited")
+        elif finite_number(upper, minimum=0) <= previous:
+            raise ValueError("Category limits must increase")
+        elif index == len(categories) - 1:
+            raise ValueError("The final category must be unlimited")
+        blocks = category.get("blocks")
+        if not isinstance(blocks, list) or not 1 <= len(blocks) <= 48:
+            raise ValueError("Use 1 to 48 blocks per category")
+        lower = 0
+        for block_index, block in enumerate(blocks):
+            if not isinstance(block, dict):
+                raise ValueError("Invalid consumption block")
+            limit = block.get("up_to")
+            if limit is None:
+                if upper is not None or block_index != len(blocks) - 1:
+                    raise ValueError(
+                        "Only the final block of an unlimited category can be unlimited"
+                    )
+            elif finite_number(limit, minimum=0) <= lower:
+                raise ValueError("Block limits must increase")
+            finite_number(block.get("rate"))
+            finite_number(block.get("fixed_charge", 0), minimum=0)
+            lower = float(limit) if limit is not None else math.inf
+        if lower != (float(upper) if upper is not None else math.inf):
+            raise ValueError("Blocks must cover the whole category")
+        previous = float(upper) if upper is not None else math.inf
     if len(config["bands"]) > 48:
         raise ValueError("At most 48 time bands")
     spans, names = [], set()
@@ -76,12 +125,55 @@ def validate_tariff(config):
         raise ValueError("Time bands overlap")
 
 
+def block_charges(config, kwh, category_kwh=None):
+    """Price cumulative import, using the category selected by the full month's import."""
+    kwh = round(finite_number(kwh, minimum=0), 9)
+    category_kwh = kwh if category_kwh is None else round(finite_number(category_kwh, minimum=0), 9)
+    category = next(
+        item
+        for item in config["block_categories"]
+        if item.get("up_to") is None or category_kwh <= float(item["up_to"])
+    )
+    tax = 1 + float(config.get("vat_percent", 0)) / 100
+    multiplier = (1 - float(config.get("discount_percent", 0)) / 100) * tax
+    rows, lower, fixed, rate = {}, 0.0, None, None
+    for block in category["blocks"]:
+        upper = float(block["up_to"]) if block.get("up_to") is not None else math.inf
+        energy = max(0, min(kwh, upper) - lower)
+        price = finite_number(float(block["rate"]) * multiplier)
+        name = (
+            f"{category['name']} · {lower:g}–{upper:g} kWh"
+            if math.isfinite(upper)
+            else f"{category['name']} · above {lower:g} kWh"
+        )
+        rows[f"block:{name}"] = {
+            "name": name,
+            "import_kwh": energy,
+            "import_cost": energy * price,
+        }
+        if fixed is None and category_kwh <= upper:
+            fixed = finite_number(float(block.get("fixed_charge", 0)) * tax)
+        if rate is None and category_kwh <= upper:
+            rate = price
+        lower = upper
+    return {
+        "category": category["name"],
+        "monthly_import_kwh": category_kwh,
+        "import_cost": finite_number(sum(row["import_cost"] for row in rows.values())),
+        "fixed_charge": fixed,
+        "rate": rate if rate is not None else price,
+        "rows": rows,
+    }
+
+
 def tariff_at(config, local):
     """An overnight band's selected weekday is the day it starts."""
     at = local.hour * 60 + local.minute
     multiplier = (1 - float(config.get("discount_percent", 0)) / 100) * (
         1 + float(config.get("vat_percent", 0)) / 100
     )
+    if config.get("tariff_model") == "block":
+        return 0.0, float(config["export_rate"]), "blocks"
     for band in config["bands"]:
         start, end = minute(band["start"]), minute(band["end"])
         weekday = local.weekday()
@@ -97,7 +189,9 @@ def tariff_at(config, local):
     return float(config["import_rate"]) * multiplier, float(config["export_rate"]), "base"
 
 
-def rates_at(config, local):
+def rates_at(config, local, monthly_kwh=0):
+    if config.get("tariff_model") == "block":
+        return block_charges(config, monthly_kwh)["rate"], float(config["export_rate"])
     return tariff_at(config, local)[:2]
 
 
@@ -149,7 +243,7 @@ def segments(start, end, zone, versions):
         points = sorted(cuts)
         for begin, finish in zip(points, points[1:]):
             middle = (begin + finish) / 2
-            config = versions[max(0, bisect_right(effective, middle) - 1)][1]
+            version, config = versions[max(0, bisect_right(effective, middle) - 1)]
             import_rate, export_rate, band = tariff_at(config, datetime.fromtimestamp(middle, zone))
             tax = 1 + float(config.get("vat_percent", 0)) / 100
             yield (
@@ -161,6 +255,7 @@ def segments(start, end, zone, versions):
                 float(config["standing_charge"]) * tax,
                 float(config.get("monthly_charge", 0)) * tax / monthrange(day.year, day.month)[1],
                 band,
+                version,
             )
         day = next_day
 
@@ -214,7 +309,7 @@ class Ledger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2):
+            if version not in (0, 1, 2, 3):
                 raise ValueError(
                     "Unsupported SolarCost database version; restore a compatible integration"
                 )
@@ -237,6 +332,12 @@ class Ledger:
                 "import_kwh REAL NOT NULL DEFAULT 0, import_cost REAL NOT NULL DEFAULT 0, "
                 "PRIMARY KEY (day, band))"
             )
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS daily_blocks (day TEXT NOT NULL, tariff REAL NOT NULL, "
+                "start_kwh REAL, import_kwh REAL NOT NULL DEFAULT 0, "
+                "fraction REAL NOT NULL DEFAULT 0, import_cost REAL NOT NULL DEFAULT 0, "
+                "fixed_charge REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, tariff))"
+            )
             if version < 2:
                 # Older daily totals cannot be reconstructed into individual time bands.
                 db.execute(
@@ -254,7 +355,7 @@ class Ledger:
             meta = dict(db.execute("SELECT key, value FROM meta"))
             if meta["time_zone"] != self.zone.key or meta["currency"] != self.currency:
                 raise ValueError("Existing ledger has a different currency or time zone")
-            db.execute("PRAGMA user_version=2")
+            db.execute("PRAGMA user_version=3")
 
     @staticmethod
     def add(db, day, values):
@@ -281,6 +382,10 @@ class Ledger:
                 for key in ("monthly_charge", "vat_percent", "discount_percent")
             }
         )
+        tariff.update(
+            tariff_model=config.get("tariff_model", "flat"),
+            block_categories=config.get("block_categories", []),
+        )
         validate_tariff(tariff)
         encoded = json.dumps(tariff, sort_keys=True)
         with self.connection() as db:
@@ -300,8 +405,9 @@ class Ledger:
             standing_until = float(
                 db.execute("SELECT value FROM meta WHERE key='standing_until'").fetchone()[0]
             )
+            changed_months = set()
             if now > standing_until:
-                for day, seconds, day_seconds, _, _, standing, fixed, _ in segments(
+                for day, seconds, day_seconds, _, _, standing, fixed, band, version in segments(
                     standing_until, now, self.zone, versions
                 ):
                     self.add(
@@ -312,6 +418,17 @@ class Ledger:
                             "fixed_charge": fixed * seconds / day_seconds,
                         },
                     )
+                    if band == "blocks":
+                        local_day = date.fromisoformat(day)
+                        fraction = (
+                            seconds / day_seconds / monthrange(local_day.year, local_day.month)[1]
+                        )
+                        db.execute(
+                            "INSERT INTO daily_blocks (day, tariff, fraction) VALUES (?, ?, ?) "
+                            "ON CONFLICT(day, tariff) DO UPDATE SET fraction=fraction+excluded.fraction",
+                            (day, version, fraction),
+                        )
+                        changed_months.add(day[:7])
                 db.execute("UPDATE meta SET value=? WHERE key='standing_until'", (str(now),))
             for source, sample in samples:
                 value = finite_number(sample["value"], minimum=0)
@@ -339,28 +456,91 @@ class Ledger:
                     if reset_at is not None and start < reset_at < at:
                         start = reset_at
                 if not correction:
-                    # ponytail: uniform use between readings; use interval meters for exact TOU allocation.
-                    for day, seconds, _, import_rate, export_rate, _, _, band in segments(
+                    # shortcut: uniform use between readings, use interval meters for exact allocation.
+                    for day, seconds, _, import_rate, export_rate, _, _, band, version in segments(
                         start, at, self.zone, versions
                     ):
-                        energy = delta * seconds / (at - start)
+                        energy = delta * (seconds / (at - start))
                         values = {f"{source}_kwh": energy}
                         if source == "import":
                             values["import_cost"] = energy * import_rate
-                            if energy:
+                            changed_months.add(day[:7])
+                            if band == "blocks":
+                                start_kwh = db.execute(
+                                    "SELECT COALESCE(SUM(import_kwh), 0) FROM daily "
+                                    "WHERE day >= ? AND day <= ?",
+                                    (day[:7] + "-01", day),
+                                ).fetchone()[0]
                                 db.execute(
-                                    "INSERT INTO daily_tou VALUES (?, ?, ?, ?) "
-                                    "ON CONFLICT(day, band) DO UPDATE SET "
-                                    "import_kwh = import_kwh + excluded.import_kwh, "
-                                    "import_cost = import_cost + excluded.import_cost",
-                                    (day, band, energy, values["import_cost"]),
+                                    "INSERT INTO daily_blocks (day, tariff, start_kwh, import_kwh) "
+                                    "VALUES (?, ?, ?, ?) ON CONFLICT(day, tariff) DO UPDATE SET "
+                                    "start_kwh=COALESCE(start_kwh, excluded.start_kwh), "
+                                    "import_kwh=import_kwh+excluded.import_kwh",
+                                    (day, version, start_kwh, energy),
                                 )
+                            elif energy:
+                                self.add_tou(db, day, band, energy, values["import_cost"])
                         elif source == "export":
                             values["export_credit"] = energy * export_rate
                         self.add(db, day, values)
                 db.execute(
                     "UPDATE readings SET value=?, at=?, resets=resets+?, corrections=corrections+? WHERE source=?",
                     (value, at, int(reset), int(correction), source),
+                )
+            for month in changed_months:
+                self.reprice_blocks(db, month)
+
+    @staticmethod
+    def add_tou(db, day, band, energy, cost):
+        db.execute(
+            "INSERT INTO daily_tou VALUES (?, ?, ?, ?) ON CONFLICT(day, band) DO UPDATE SET "
+            "import_kwh=import_kwh+excluded.import_kwh, import_cost=import_cost+excluded.import_cost",
+            (day, band, energy, cost),
+        )
+
+    def reprice_blocks(self, db, month):
+        """Reprice this month's blocks at their recorded tariffs, keeping flat charges intact."""
+        start, end = month + "-01", month + "-31"
+        rows = db.execute(
+            "SELECT daily_blocks.*, tariffs.config FROM daily_blocks "
+            "JOIN tariffs ON tariffs.effective=daily_blocks.tariff WHERE day >= ? AND day <= ?",
+            (start, end),
+        ).fetchall()
+        if not rows:
+            return
+        quantity = db.execute(
+            "SELECT COALESCE(SUM(import_kwh), 0) FROM daily WHERE day >= ? AND day <= ?",
+            (start, end),
+        ).fetchone()[0]
+        db.execute(
+            "DELETE FROM daily_tou WHERE day >= ? AND day <= ? AND band LIKE 'block:%'",
+            (start, end),
+        )
+        for row in rows:
+            config = json.loads(row["config"])
+            left = block_charges(config, row["start_kwh"] or 0, quantity)
+            right = block_charges(config, (row["start_kwh"] or 0) + row["import_kwh"], quantity)
+            cost = right["import_cost"] - left["import_cost"]
+            fixed = right["fixed_charge"] * row["fraction"]
+            self.add(
+                db,
+                row["day"],
+                {
+                    "import_cost": cost - row["import_cost"],
+                    "fixed_charge": fixed - row["fixed_charge"],
+                },
+            )
+            db.execute(
+                "UPDATE daily_blocks SET import_cost=?, fixed_charge=? WHERE day=? AND tariff=?",
+                (cost, fixed, row["day"], row["tariff"]),
+            )
+            for key, band in right["rows"].items():
+                self.add_tou(
+                    db,
+                    row["day"],
+                    key,
+                    band["import_kwh"] - left["rows"][key]["import_kwh"],
+                    band["import_cost"] - left["rows"][key]["import_cost"],
                 )
 
     @staticmethod
@@ -396,7 +576,9 @@ class Ledger:
         ):
             key = row["band"]
             bands[key] = {
-                "name": {"base": "Base rate", "unallocated": "Unallocated"}.get(key, key[5:]),
+                "name": {"base": "Base rate", "unallocated": "Unallocated"}.get(
+                    key, key[6:] if key.startswith("block:") else key[5:]
+                ),
                 "import_kwh": round(row["import_kwh"], 6),
                 "import_cost": round(row["import_cost"], 6),
             }
@@ -425,6 +607,12 @@ class Ledger:
                     0
                 ]
             )
+            monthly_kwh = periods["month"]["import_kwh"]
+            block = (
+                block_charges(config, monthly_kwh)
+                if config.get("tariff_model") == "block"
+                else None
+            )
             return {
                 "periods": periods,
                 "since": since.isoformat(),
@@ -432,7 +620,13 @@ class Ledger:
                     float(meta["time_of_use_since"]), self.zone
                 ).isoformat(),
                 "updated_at": datetime.fromtimestamp(now, UTC).isoformat(),
-                "rates": rates_at(config, datetime.fromtimestamp(now, self.zone)),
+                "rates": rates_at(config, datetime.fromtimestamp(now, self.zone), monthly_kwh),
+                "tariff_model": config.get("tariff_model", "flat"),
+                "block_tariff": {
+                    key: value for key, value in block.items() if key not in ("rows", "import_cost")
+                }
+                if block
+                else None,
                 "readings": {
                     row["source"]: dict(row) for row in db.execute("SELECT * FROM readings")
                 },

@@ -266,7 +266,7 @@ class AccountingTest(unittest.TestCase):
         )
         self.assertEqual(result["time_of_use"]["base"]["import_kwh"], 1)
         with sqlite3.connect(self.ledger.path) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM daily_tou").fetchone()[0], 2)
 
     def test_dst_standing_and_missing_tariff_boundary(self):

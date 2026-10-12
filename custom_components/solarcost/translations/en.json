@@ -36,7 +36,8 @@
           "edit_band": "Edit a time band",
           "remove_band": "Remove time bands",
           "init": "Back to settings",
-          "save": "Save"
+          "save": "Save",
+          "blocks": "Monthly consumption blocks (advanced)"
         }
       },
       "band": {
@@ -62,6 +63,14 @@
         "data": {
           "bands": "Time bands to remove"
         }
+      },
+      "blocks": {
+        "title": "Monthly consumption blocks (advanced)",
+        "description": "Optional: most users can leave this disabled. Categories are selected by total grid import in each local calendar month. Add categories and their blocks in increasing cumulative kWh order. Leave the final category and its final block limit empty for unlimited consumption. Earlier imports and accrued fixed fees in the same month are recalculated when its category changes. Fixed fees accrue daily; additional standing charges and monthly fees still apply. Base import rates and time-of-use bands are inactive while enabled. Saved tariff changes apply to future energy and fee accrual.",
+        "data": {
+          "enabled": "Use monthly consumption blocks",
+          "categories": "Consumption categories and progressive blocks"
+        }
       }
     },
     "error": {
@@ -70,7 +79,8 @@
       "invalid_currency": "Enter a three-letter currency code, such as EUR, GBP or USD.",
       "invalid_name": "Enter a name.",
       "invalid_tariff": "Enter finite rates, non-negative fixed charges, and percentages between 0 and 100.",
-      "invalid_band": "Check the unique name, weekdays and whole-minute times. Bands cannot overlap, start and end must differ, and at most 48 bands are allowed."
+      "invalid_band": "Check the unique name, weekdays and whole-minute times. Bands cannot overlap, start and end must differ, and at most 48 bands are allowed.",
+      "invalid_blocks": "Check unique category names and increasing positive kWh limits. Blocks must cover their category. Leave the final category and final block unlimited. Use finite prices and non-negative fixed fees; up to 48 categories and 48 blocks per category."
     }
   },
   "options": {
@@ -97,7 +107,8 @@
           "edit_band": "Edit a time band",
           "remove_band": "Remove time bands",
           "init": "Back to settings",
-          "save": "Save"
+          "save": "Save",
+          "blocks": "Monthly consumption blocks (advanced)"
         }
       },
       "band": {
@@ -131,7 +142,8 @@
           "rates": "Rates and reporting periods",
           "bands": "Time-of-use bands",
           "meters": "Energy meters",
-          "save": "Save changes"
+          "save": "Save changes",
+          "blocks": "Monthly consumption blocks (advanced)"
         }
       },
       "meters": {
@@ -143,6 +155,14 @@
           "import_sensor": "Grid import energy meter",
           "export_sensor": "Grid export energy meter"
         }
+      },
+      "blocks": {
+        "title": "Monthly consumption blocks (advanced)",
+        "description": "Optional: most users can leave this disabled. Categories are selected by total grid import in each local calendar month. Add categories and their blocks in increasing cumulative kWh order. Leave the final category and its final block limit empty for unlimited consumption. Earlier imports and accrued fixed fees in the same month are recalculated when its category changes. Fixed fees accrue daily; additional standing charges and monthly fees still apply. Base import rates and time-of-use bands are inactive while enabled. Saved tariff changes apply to future energy and fee accrual.",
+        "data": {
+          "enabled": "Use monthly consumption blocks",
+          "categories": "Consumption categories and progressive blocks"
+        }
       }
     },
     "error": {
@@ -151,7 +171,8 @@
       "invalid_currency": "Enter a three-letter currency code, such as EUR, GBP or USD.",
       "invalid_name": "Enter a name.",
       "invalid_tariff": "Enter finite rates, non-negative fixed charges, and percentages between 0 and 100.",
-      "invalid_band": "Check the unique name, weekdays and whole-minute times. Bands cannot overlap, start and end must differ, and at most 48 bands are allowed."
+      "invalid_band": "Check the unique name, weekdays and whole-minute times. Bands cannot overlap, start and end must differ, and at most 48 bands are allowed.",
+      "invalid_blocks": "Check unique category names and increasing positive kWh limits. Blocks must cover their category. Leave the final category and final block unlimited. Use finite prices and non-negative fixed fees; up to 48 categories and 48 blocks per category."
     }
   },
   "entity": {

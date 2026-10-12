@@ -126,6 +126,36 @@ A cheaper EV period inside a night tariff needs separate night bands on either s
 
 Replace these example prices and times with your own tariff. SolarCost starts tracking when you save the completed setup.
 
+### Advanced: monthly consumption blocks
+
+Most users can skip this feature: the usual setup still goes from energy meters to rates, optional time bands, then **Save**. For a provider that uses monthly consumption categories and progressive unit blocks, choose **Monthly consumption blocks (advanced)** from the time-band menu, or later from **Configure**.
+
+Enable **Use monthly consumption blocks**, then add categories and their nested blocks using the native forms. Each category has a unique name, an upper monthly grid-import limit, and a list of progressive blocks. Each block has an upper cumulative kWh limit, an import price, and an optional monthly fixed fee. Enter limits in increasing order; leave the final category and its final block unlimited. A single unlimited category also supports an ordinary progressive tariff without category changes.
+
+Limits are inclusive and measure cumulative **grid import**, not home consumption or import minus export. For example, limits of 30 and 60 mean the first 30 kWh and the next 30 kWh. The month resets at local midnight on the first day, using the ledger's time zone. Base import prices and time bands are inactive while blocks are enabled; the base export payment still applies. Disabling blocks restores standard pricing and retains the block configuration for reuse.
+
+The [illustrative schedule from issue #6](https://github.com/jouwdan/SolarCost/issues/6) is also included in [block_tariff.json](examples/block_tariff.json). These are example prices, not a statement of current supplier rates. Its completed-month import charges and selected monthly fixed fees are:
+
+| Imported kWh | Import charge | Monthly fixed fee |
+| --- | --- | --- |
+| 30 | 150 | 80 |
+| 60 | 420 | 210 |
+| 61 | 860 | 400 |
+| 90 | 1,440 | 400 |
+| 120 | 2,280 | 1,000 |
+| 180 | 4,920 | 1,500 |
+| 181 | 5,950 | 2,500 |
+
+The selected fixed fee **accrues daily**, using the actual days in that calendar month, rather than being charged in full immediately. Existing daily standing charges and additional monthly levies still apply; leave them at zero if the tier fee already covers them. Discounts apply to imported energy, and optional VAT applies to imported energy and fixed fees. Export payments remain separate.
+
+Crossing a category threshold can change prices for earlier imported units and accrued tier fees in the same month. Daily sensors, history and date-range reports therefore remain provisional for an open month. Once the month is complete, its category stops changing with later months' consumption. Recorded tariff versions are retained: editing prices affects future energy and fee accrual, and does not replace the schedules used for earlier intervals. Consumption already recorded in the month still counts toward its block positions when switching models or changing tariffs.
+
+The **Costs** view shows the category and consumption ranges for each import block. **Current rates** shows the current block's unit price and month-to-date import; that unit price excludes the additional effect of repricing earlier units at a category transition. Custom report dates select stored days without restarting the monthly block counters.
+
+<img src="docs/screenshots/blocks.png" alt="SolarCost monthly consumption blocks using illustrative LKR prices" width="320">
+
+Tracking partway through a month cannot recover earlier unrecorded consumption, so its category and bill may be understated. Non-calendar supplier billing cycles are not supported by this monthly model. Version 0.3.0 upgrades the ledger schema while preserving existing totals; reverting to an older integration requires restoring a pre-upgrade database backup.
+
 ## The card in action
 
 One card, one selected period. Switch between the energy overview, time-of-use costs and interactive bill or energy history. These screenshots use **example data**, not a household's readings.
@@ -222,7 +252,7 @@ If a period ends before tracking began, its sensors show **Unknown** and `has_hi
 
 Open **Settings → Devices & services → SolarCost → Configure**. Choose **Rates and reporting periods**, **Time-of-use bands** or **Energy meters**, make your changes, then choose **Save changes**.
 
-Saved tariff changes apply going forward. Previously recorded charges keep their original prices; changing a rate does not recalculate old bills. Changing a source meter keeps recorded totals and establishes a new starting reading for that source.
+Saved tariff changes apply going forward. Previously recorded intervals keep their original tariff schedules; changing a rate does not recalculate old bills. With monthly blocks, a later category threshold can still reprice earlier intervals in the same month using their recorded schedules. Changing a source meter keeps recorded totals and establishes a new starting reading for that source.
 
 Use this menu when your supplier changes prices or you replace a meter. Currency and time zone remain fixed for the existing ledger.
 

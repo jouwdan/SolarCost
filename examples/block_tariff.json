@@ -1,0 +1,30 @@
+{
+  "tariff_model": "block",
+  "block_categories": [
+    {
+      "name": "Low consumption",
+      "up_to": 60,
+      "blocks": [
+        {"up_to": 30, "rate": 5, "fixed_charge": 80},
+        {"up_to": 60, "rate": 9, "fixed_charge": 210}
+      ]
+    },
+    {
+      "name": "Standard consumption",
+      "up_to": 180,
+      "blocks": [
+        {"up_to": 60, "rate": 14, "fixed_charge": 0},
+        {"up_to": 90, "rate": 20, "fixed_charge": 400},
+        {"up_to": 120, "rate": 28, "fixed_charge": 1000},
+        {"up_to": 180, "rate": 44, "fixed_charge": 1500}
+      ]
+    },
+    {
+      "name": "High consumption",
+      "blocks": [
+        {"up_to": 180, "rate": 32.5, "fixed_charge": 0},
+        {"rate": 100, "fixed_charge": 2500}
+      ]
+    }
+  ]
+}
