@@ -69,6 +69,7 @@ try {
   assert(exchange.open && root.querySelector(".grid-energy").children.length === 2, "Live updates must preserve the grid disclosure and its energy tiles");
   exchange.open = false;
   assert(card.money(0.004151) === "€0.004151", "Sub-cent costs must not appear free");
+  assert(card.money(-0) === "€0.00", "Zero export credit must not show a minus sign");
   assert(card.money(-0.004151) === "-€0.004151", "Sub-cent credits must keep their sign");
   root.querySelector('[data-view="costs"]').click();
   assert(root.querySelectorAll(".band").length === 5, "Split Night bands must merge and export credit must appear underneath");
@@ -144,12 +145,31 @@ try {
   assert(edited.title === "Electricity" && edited.type === "custom:solarcost-card", "Visual edits must preserve the complete card configuration");
   titleInput.value = ""; titleInput.dispatchEvent(new Event("change"));
   assert(!("title" in edited), "Clearing the title must restore its default");
-    document.querySelector("#checks").textContent = "PASS: Summary, grid disclosure, periods, credits, TOU grouping, live updates, report history, stale responses, custom dates, errors, chart bounds, export credit and visual editing.";
+  const blockStates = { ...states,
+    "sensor.month_bill": { ...states["sensor.month_bill"], state: "865.826452", attributes: { ...states["sensor.month_bill"].attributes,
+      unit_of_measurement: "LKR", import_cost: 840.02, import_kwh: 60.001, standing_charge: 0, export_credit: 0, export_kwh: 0, fixed_charge: 25.806452, time_of_use: {
+        "block:Standard · 0–60 kWh": { name: "Standard · 0–60 kWh", import_kwh: 60, import_cost: 840 },
+        "block:Standard · 60–90 kWh": { name: "Standard · 60–90 kWh", import_kwh: 0.001, import_cost: 0.02 },
+      },
+    } },
+    "sensor.import_rate": { ...states["sensor.import_rate"], state: "20", attributes: { ...states["sensor.import_rate"].attributes,
+      tariff_model: "block", category: "Standard", monthly_import_kwh: 60.001,
+    } },
+  };
+  card.hass = { ...hass, states: blockStates };
+  root.querySelector('[data-view="costs"]').click();
+  assert(root.querySelector(".bars").textContent.includes("Standard · 0–60 kWh"), "Costs must show consumption blocks");
+  assert(root.querySelector(".band-note").textContent.includes("calendar-month grid import"), "Block estimates must explain monthly repricing");
+  assert(root.querySelector(".rate-note").textContent.includes("60.001 kWh") && root.querySelector(".rates").textContent.includes("Current import block"), "Current block rates must show the category and monthly consumption");
+  assert(root.querySelector(".hero").scrollWidth <= root.querySelector(".hero").clientWidth, "Block bills and longer currency labels must fit on phones");
+  card.hass = new URLSearchParams(location.search).get("view") === "blocks" ? { ...hass, states: blockStates } : hass;
+  root.querySelector('[data-view="overview"]').click();
+    document.querySelector("#checks").textContent = "PASS: Summary, grid disclosure, periods, credits, TOU and monthly blocks, live updates, report history, stale responses, custom dates, errors, chart bounds, export credit and visual editing.";
 } catch (error) { document.querySelector("#checks").textContent = `FAIL: ${error.message}`; throw error; }
 
-// Open ?view=overview|costs|history|energy for clean, reproducible README captures.
+// Open ?view=overview|costs|history|energy|blocks for clean, reproducible README captures.
 const showcase = new URLSearchParams(location.search).get("view");
-if (["overview", "costs", "history", "energy"].includes(showcase)) {
+if (["overview", "costs", "history", "energy", "blocks"].includes(showcase)) {
   document.querySelector("h1").textContent = "SolarCost · example data";
   document.querySelector("h1").style.cssText = "font-size:14px;font-weight:400;color:#aaa";
   document.querySelector("#checks").hidden = true;
@@ -157,7 +177,7 @@ if (["overview", "costs", "history", "energy"].includes(showcase)) {
   cards[1].style.display = "none";
   card.style.width = "400px";
   card.chart = showcase === "energy" ? "energy" : "bill";
-  root.querySelector(`[data-view="${showcase === "energy" ? "history" : showcase}"]`).click();
+  root.querySelector(`[data-view="${showcase === "energy" ? "history" : showcase === "blocks" ? "costs" : showcase}"]`).click();
   root.querySelector(".bill-details").open = false;
   root.querySelector(".rates").parentElement.open = false;
   document.querySelector("h1").tabIndex = -1;

@@ -86,7 +86,12 @@ class SolarCostSensor(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self):
         identity = {"entry_id": self.entry_id, "period": self.period, "metric": self.metric}
         if self.period == "current":
-            return {**identity, "time_zone": self.coordinator.settings["time_zone"]}
+            return {
+                **identity,
+                "time_zone": self.coordinator.settings["time_zone"],
+                "tariff_model": self.coordinator.data["tariff_model"],
+                **(self.coordinator.data["block_tariff"] or {}),
+            }
         data = self.coordinator.data
         period = data["periods"][self.period]
         attributes = {

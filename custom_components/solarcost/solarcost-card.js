@@ -56,14 +56,14 @@ class SolarCostCard extends HTMLElement {
         .dates { display: flex; gap: var(--echo-space-8,8px); flex-wrap: wrap; margin-top: var(--echo-space-16,16px); align-items: end; }
         .dates label { flex: 1; min-width: 110px; font-size:var(--echo-type-12,12px); color: var(--secondary-text-color); }
         input { width: 100%; margin-top: var(--echo-space-4,4px); font-size:var(--echo-type-14,13px); }
-        .hero { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 16px; padding: 20px 0; }
+        .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; padding: 20px 0; }
         .hero .eyebrow { grid-column: 1; grid-row: 1; }
         .hero .amount { grid-column: 1; grid-row: 2; }
         .hero .range { grid-column: 2; grid-row: 1 / 3; max-width: 128px; text-align: right; line-height: 1.5; }
         .hero .context { grid-column: 1 / -1; }
         .hero .muted { font-size: 14px; }
         .eyebrow { font-size:var(--echo-type-14,13px); color: var(--secondary-text-color); }
-        .amount { font-size: 40px; line-height: 1.3; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+        .amount { font-size: 40px; line-height: 1.3; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
         .credit { color: var(--sc-green); }
         .muted { font-size:var(--echo-type-12,12px); color: var(--secondary-text-color); line-height: 1.5; }
         .context { margin-top: var(--echo-space-4,4px); }
@@ -134,7 +134,7 @@ class SolarCostCard extends HTMLElement {
         <div class="hero"><div class="eyebrow">Estimated bill</div><div class="amount">—</div><div class="muted range"></div><div class="muted context" role="status"></div></div>
         <nav aria-label="Card view"><button data-view="overview" aria-pressed="true">Summary</button><button data-view="costs" aria-pressed="false">Costs</button><button data-view="history" aria-pressed="false">History</button></nav>
         <section class="overview"><div class="energy"></div><details class="device-details"><summary>Grid exchange</summary><div class="grid-energy energy"></div><div class="flows"></div></details></section>
-        <section class="costs" hidden><h3>Energy costs and credits</h3><div class="bars" role="list" aria-label="Costs by time band and export credit"></div><p class="muted band-note note"></p><details class="bill-details" open><summary>Bill breakdown</summary><div class="breakdown"></div></details><details><summary>Current rates</summary><div class="rates"></div><p class="muted">Effective prices now, including configured discounts and VAT. Historical costs retain their recorded prices.</p></details></section>
+        <section class="costs" hidden><h3>Energy costs and credits</h3><div class="bars" role="list" aria-label="Import costs and export credit"></div><p class="muted band-note note"></p><details class="bill-details" open><summary>Bill breakdown</summary><div class="breakdown"></div></details><details><summary>Current rates</summary><div class="rates"></div><p class="muted rate-note"></p></details></section>
         <section class="history" hidden><div class="history-head"><h3>Bill history</h3><button class="chart-toggle">Show energy</button></div><p class="muted history-status" role="status"></p><div class="history-chart"></div></section>
         <footer class="muted">Estimates include configured discounts, tax and fixed charges.</footer>
       </ha-card>`;
@@ -213,7 +213,7 @@ class SolarCostCard extends HTMLElement {
     return new Intl.NumberFormat(this._hass.locale?.language || undefined, {
       style: "currency", currency: this.currency, minimumFractionDigits: digits ?? 2,
       maximumFractionDigits: digits ?? (value !== 0 && Math.abs(value) < 0.01 ? 6 : 2),
-    }).format(value);
+    }).format(Object.is(value, -0) ? 0 : value);
   }
 
   number(value) {
@@ -334,6 +334,7 @@ class SolarCostCard extends HTMLElement {
         bars.append(item);
       }
       root.querySelector(".band-note").textContent = [
+        rows.some(row => row.key.startsWith("block:")) ? "Monthly blocks use calendar-month grid import. Costs and accrued fixed fees can change as the month crosses a threshold." : "",
         !active.length ? "No imports recorded for this period." : "",
         active.some(row => row.key === "unallocated") ? "Unallocated: recorded before time-band tracking." : "",
         active.some(row => row.cost < 0) ? "Negative amounts are import credits." : "",
@@ -343,10 +344,15 @@ class SolarCostCard extends HTMLElement {
       ...[["import_cost", "Imported electricity", 1], ["standing_charge", "Standing charge", 1], ["fixed_charge", "Monthly levy / fee", 1], ["export_credit", "Export credit", -1], ["net_cost", "Estimated total", 1]]
         .map(([key, name, sign]) => this.line(name, this.money(this.data[key] * sign))),
     );
+    const imported = this.states.find(state => state.attributes.metric === "import_rate");
+    const block = imported?.attributes.tariff_model === "block";
     root.querySelector(".rates").replaceChildren(...["import_rate", "export_rate"].map(metric => {
       const rate = this.states.find(state => state.attributes.metric === metric);
-      return this.line(metric === "import_rate" ? "Import now" : "Export now", rate && Number.isFinite(Number(rate.state)) ? `${this.money(Number(rate.state), 4)} / kWh` : "Unavailable");
+      return this.line(metric === "import_rate" ? (block ? "Current import block" : "Import now") : "Export now", rate && Number.isFinite(Number(rate.state)) ? `${this.money(Number(rate.state), 4)} / kWh` : "Unavailable");
     }));
+    root.querySelector(".rate-note").textContent = block
+      ? `${imported.attributes.category} · ${this.number(imported.attributes.monthly_import_kwh)} kWh imported this month. This block's unit price excludes any repricing when the monthly category changes. Fixed fees accrue daily.`
+      : "Effective prices now, including configured discounts and VAT. Historical costs retain their recorded prices.";
   }
 
   async loadReport(range, key) {

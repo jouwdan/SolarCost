@@ -98,9 +98,11 @@ class TariffSteps:
         )
 
     async def async_step_bands(self, user_input=None):
-        menu = ["add_band"]
-        if self._settings["bands"]:
+        block = self._settings.get("tariff_model") == "block"
+        menu = [] if block else ["add_band"]
+        if self._settings["bands"] and not block:
             menu += ["edit_band", "remove_band"]
+        menu += ["blocks"]
         if self._options:
             menu += ["init"]
         menu += ["save"]
@@ -111,8 +113,89 @@ class TariffSteps:
             )
             or "Base rates apply all day."
         )
+        if block:
+            summary = "Monthly consumption blocks are enabled. Time-of-use bands are inactive."
         return self.async_show_menu(
             step_id="bands", menu_options=menu, description_placeholders={"bands": summary}
+        )
+
+    async def async_step_blocks(self, user_input=None):
+        errors = {}
+        if user_input is not None:
+            candidate = {
+                **self._settings,
+                "tariff_model": "block" if user_input["enabled"] else "flat",
+                "block_categories": user_input.get("categories", []),
+            }
+            try:
+                validate_tariff(candidate)
+            except (ValueError, TypeError):
+                errors["base"] = "invalid_blocks"
+            else:
+                self._settings = candidate
+                return await (self.async_step_init() if self._options else self.async_step_bands())
+        number = selector.NumberSelector(
+            selector.NumberSelectorConfig(mode="box", min=0, step="any")
+        )
+        blocks = selector.ObjectSelector(
+            selector.ObjectSelectorConfig(
+                multiple=True,
+                fields={
+                    "up_to": {
+                        "label": "Up to cumulative kWh (empty = unlimited)",
+                        "selector": number,
+                    },
+                    "rate": {
+                        "label": f"Import price ({self._settings['currency']}/kWh)",
+                        "required": True,
+                        "selector": selector.NumberSelector(
+                            selector.NumberSelectorConfig(mode="box", step="any")
+                        ),
+                    },
+                    "fixed_charge": {
+                        "label": f"Monthly fixed fee ({self._settings['currency']}; optional)",
+                        "selector": number,
+                    },
+                },
+            )
+        )
+        categories = selector.ObjectSelector(
+            selector.ObjectSelectorConfig(
+                multiple=True,
+                label_field="name",
+                fields={
+                    "name": {
+                        "label": "Category name",
+                        "required": True,
+                        "selector": selector.TextSelector(),
+                    },
+                    "up_to": {
+                        "label": "Up to monthly grid import (kWh; empty = unlimited)",
+                        "selector": number,
+                    },
+                    "blocks": {
+                        "label": "Progressive consumption blocks",
+                        "required": True,
+                        "selector": blocks,
+                    },
+                },
+            )
+        )
+        defaults = user_input or {
+            "enabled": self._settings.get("tariff_model") == "block",
+            "categories": self._settings.get("block_categories", []),
+        }
+        return self.async_show_form(
+            step_id="blocks",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "enabled", default=defaults["enabled"]
+                    ): selector.BooleanSelector(),
+                    vol.Optional("categories", default=defaults.get("categories", [])): categories,
+                }
+            ),
+            errors=errors,
         )
 
     async def async_step_add_band(self, user_input=None):
@@ -216,6 +299,7 @@ class TariffSteps:
         )
 
     async def async_step_save(self, user_input=None):
+        validate_tariff(self._settings)
         return self.async_create_entry(
             title="" if self._options else self._settings["name"], data=self._settings
         )
@@ -265,9 +349,18 @@ class SolarCostOptionsFlow(TariffSteps, config_entries.OptionsFlowWithReload):
 
     async def async_step_init(self, user_input=None):
         if self._settings is None:
-            self._settings = deepcopy({**self.config_entry.data, **self.config_entry.options})
+            self._settings = deepcopy(
+                {**DEFAULTS, **self.config_entry.data, **self.config_entry.options}
+            )
         return self.async_show_menu(
-            step_id="init", menu_options=["rates", "bands", "meters", "save"]
+            step_id="init",
+            menu_options=[
+                "rates",
+                *([] if self._settings.get("tariff_model") == "block" else ["bands"]),
+                "blocks",
+                "meters",
+                "save",
+            ],
         )
 
     async def async_step_meters(self, user_input=None):

@@ -9,7 +9,7 @@ SolarCost is one HACS **Integration** repository. Its Python integration, JavaSc
 - Python accounting tests and Ruff checks.
 - Node card tests.
 - An installable ZIP built from committed integration files, checked for its version, required assets, safe layout and matching file contents.
-- Setup, configuration, persistence and report smoke tests in Home Assistant 2026.9.0, the declared minimum version.
+- Setup, configuration, persistence and report smoke tests in Home Assistant 2026.9.0 (the declared minimum) and 2026.10.1, including unchanged basic onboarding and opt-in monthly block setup, validation and disabling.
 - Official `home-assistant/actions/hassfest` and `hacs/action` validation. No HACS checks are ignored.
 
 The HACS action reads the repository revision from GitHub. It is explicitly given the pull request's head SHA or the running commit SHA so validation also covers the exact revision during a release. GitHub Actions dependency updates are proposed monthly by Dependabot.
@@ -23,6 +23,7 @@ ruff check .
 ruff format --check .
 node tests/test_card.mjs
 docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint python ghcr.io/home-assistant/home-assistant:2026.9.0 tests/ha_smoke.py
+docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint python ghcr.io/home-assistant/home-assistant:2026.10.1 tests/ha_smoke.py
 docker run --rm -v "$PWD:/github/workspace" ghcr.io/home-assistant/hassfest
 ```
 
