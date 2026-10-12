@@ -131,7 +131,7 @@ Replace these example prices and times with your own tariff. SolarCost starts tr
 One card, one selected period. Switch between the energy overview, time-of-use costs and interactive bill or energy history. These screenshots use **example data**, not a household's readings.
 
 <p>
-  <img src="docs/screenshots/overview.png" alt="SolarCost Overview with estimated bill and four energy totals" width="320">
+  <img src="docs/screenshots/overview.png" alt="SolarCost Summary with estimated bill, solar and home energy totals, and expandable grid exchange" width="320">
   <img src="docs/screenshots/costs.png" alt="SolarCost Costs comparing Day, EV, Peak and Night rates with export credit" width="320">
 </p>
 <p>
@@ -158,13 +158,15 @@ Choose any **Estimated bill** sensor belonging to your SolarCost setup. Its repo
 
 Use the period selector for **Today**, **This week**, **This month**, **Last month**, your configured month/year windows or **All time**. Every view follows the same selected period:
 
-- **Overview:** a prominent estimated bill or credit, plus solar generation, home usage, grid import and export in kWh, with imported electricity cost and export credit.
+- **Summary:** a prominent estimated bill or credit, plus solar generation and home usage in kWh. Expand **Grid exchange** for grid import, export, imported electricity cost and export credit.
 - **Costs:** horizontal bars compare costs by time-of-use band, with each band's kWh underneath. A green export-credit bar underneath uses the same scale to show the offset against imports. The bill breakdown includes standing charges, monthly fees and export credit. Expand **Current rates** to see the effective import and export prices now.
 - **History:** switch between bill and energy charts, then select a date’s bars for exact amounts below the chart. With only one recorded period, its details are already shown. Short ranges use daily bars, medium ranges use months, and long ranges use years. Credit amounts extend below zero. Charts read SolarCost's own stored ledger.
 
 For a two-month bill, choose **Custom dates**, enter the supplier's start and end dates, then select **Apply**. Both dates are included. Overview, Costs and History all use that report. Custom reports are snapshots; select **Apply** again to refresh them. Standard reporting periods update automatically.
 
 When upgrading from the earlier dashboard template, replace the entire SolarCost vertical stack with the short configuration above. The older standalone `custom:solarcost-tou-card` remains supported. You can still build other dashboards using the individual SolarCost sensors.
+
+The card waits for Home Assistant's frontend to finish registering its root element before registering itself. This prevents intermittent **Custom element not found: solarcost-card** errors during startup. After updating, restart Home Assistant and refresh the dashboard to load the new card. The card also follows optional `--echo-*` theme variables, with Home Assistant defaults when they are absent, and preserves the earlier `custom:echo-solarcost-card` name used by existing dashboards.
 
 ## Understand your estimates
 

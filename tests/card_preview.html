@@ -6,14 +6,14 @@
   body { margin: 20px; background: #111; color: #eee; font: 14px system-ui; }
   main { display: flex; align-items: start; gap: 24px; flex-wrap: wrap; }
   ha-card { display: block; background: var(--card-background-color); border-radius: 16px; border: 1px solid var(--divider-color); }
-  solarcost-card { width: 340px; --primary-text-color: #eee; --secondary-text-color: #aaa; --card-background-color: #1c1c1c; --secondary-background-color: #282828; --divider-color: #ffffff1f; --primary-color: #60a5fa; }
+  solarcost-card { width: 340px; max-width: 100%; --primary-text-color: #eee; --secondary-text-color: #aaa; --card-background-color: #1c1c1c; --secondary-background-color: #282828; --divider-color: #ffffff1f; --primary-color: #60a5fa; }
   solarcost-card.wide { width: 500px; --primary-text-color: #222; --secondary-text-color: #666; --card-background-color: #fff; --secondary-background-color: #f2f4f7; --divider-color: #0002; --primary-color: #3378cf; }
 </style>
 <h1>SolarCost · sample data only</h1>
 <p id="checks">Running browser checks…</p>
 <main><solarcost-card></solarcost-card><solarcost-card class="wide"></solarcost-card></main>
 <script type="module">
-import "../custom_components/solarcost/solarcost-card.js";
+import "../custom_components/solarcost/solarcost-card.js?v=preview";
 customElements.define("ha-card", class extends HTMLElement {
   constructor() {
     super();
@@ -57,6 +57,17 @@ const choose = value => { const select = root.querySelector(".period"); select.v
 try {
   assert(root.querySelectorAll(".period option").length === 9, "All periods and custom dates must be offered");
   assert(root.querySelector(".amount").textContent === "€35.32", "Overview must show net bill");
+  assert(root.querySelector('[data-view="overview"]').textContent === "Summary", "The overview tab must use the HA Summary label");
+  assert(getComputedStyle(root.querySelector('[data-view="overview"]')).backgroundColor !== getComputedStyle(root.querySelector('[data-view="history"]')).backgroundColor, "Selected tabs must have a distinct background");
+  assert(getComputedStyle(root.querySelector(".period")).appearance === "none" && parseFloat(getComputedStyle(root.querySelector(".period")).paddingRight) >= 32, "The period selector must reserve room for its aligned custom arrow");
+  assert(root.querySelector(".overview > .energy").children.length === 2, "Summary must show solar generation and home usage");
+  assert([...root.querySelectorAll(".overview > .energy .tile")].every(tile => tile.scrollWidth <= tile.clientWidth), "Energy amounts and units must fit inside narrow tiles");
+  const exchange = root.querySelector(".device-details");
+  assert(!exchange.open && root.querySelector(".grid-energy").children.length === 2, "Grid import and export must start collapsed");
+  exchange.open = true;
+  card.hass = { ...hass, states: { ...states, "sensor.month_bill": { ...states["sensor.month_bill"] } } };
+  assert(exchange.open && root.querySelector(".grid-energy").children.length === 2, "Live updates must preserve the grid disclosure and its energy tiles");
+  exchange.open = false;
   assert(card.money(0.004151) === "€0.004151", "Sub-cent costs must not appear free");
   assert(card.money(-0.004151) === "-€0.004151", "Sub-cent credits must keep their sign");
   root.querySelector('[data-view="costs"]').click();
@@ -133,7 +144,7 @@ try {
   assert(edited.title === "Electricity" && edited.type === "custom:solarcost-card", "Visual edits must preserve the complete card configuration");
   titleInput.value = ""; titleInput.dispatchEvent(new Event("change"));
   assert(!("title" in edited), "Clearing the title must restore its default");
-    document.querySelector("#checks").textContent = "PASS: periods, credits, TOU grouping, live updates, report history, stale responses, custom dates, errors, chart bounds, export credit and visual editing.";
+    document.querySelector("#checks").textContent = "PASS: Summary, grid disclosure, periods, credits, TOU grouping, live updates, report history, stale responses, custom dates, errors, chart bounds, export credit and visual editing.";
 } catch (error) { document.querySelector("#checks").textContent = `FAIL: ${error.message}`; throw error; }
 
 // Open ?view=overview|costs|history|energy for clean, reproducible README captures.

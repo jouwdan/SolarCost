@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 globalThis.HTMLElement = class {};
 globalThis.customElements = { get: () => true };
+globalThis.document = { querySelector: () => null };
 const source = await readFile(new URL("../custom_components/solarcost/solarcost-tou-card.js", import.meta.url));
 const { bandRows } = await import(`data:text/javascript;base64,${source.toString("base64")}`);
 
@@ -31,7 +32,7 @@ assert.throws(() => bandRows({ bad: { import_cost: 1, import_kwh: -1 } }));
 console.log("PASS: time-band grouping, ordering, credits, zero costs and invalid readings");
 
 const cardSource = (await readFile(new URL("../custom_components/solarcost/solarcost-card.js", import.meta.url), "utf8"))
-  .replace('"./solarcost-tou-card.js"', JSON.stringify(`data:text/javascript;base64,${source.toString("base64")}`));
+  .replace('`./solarcost-tou-card.js${new URL(import.meta.url).search}`', JSON.stringify(`data:text/javascript;base64,${source.toString("base64")}`));
 const { reportGrouping, relatedStates } = await import(`data:text/javascript;base64,${Buffer.from(cardSource).toString("base64")}`);
 assert.equal(reportGrouping("2026-07-01", "2026-08-31"), "day");
 assert.equal(reportGrouping("2026-06-30", "2026-08-31"), "month");
@@ -44,3 +45,46 @@ assert.deepEqual(relatedStates({ bill, rate, foreign, energy }, bill), [bill, ra
 assert.deepEqual(relatedStates({ bill }, undefined), []);
 assert.deepEqual(relatedStates({ bill }, energy), []);
 console.log("PASS: scalable report grouping, renamed sensors and separate SolarCost setups");
+
+for (const mode of ["cold", "cached-helper", "warm"]) {
+  const cold = mode !== "warm";
+  let resume, waiting;
+  const boot = new Promise(resolve => { resume = resolve; });
+  const started = new Promise(resolve => { waiting = resolve; });
+  const nativeDefinitions = new Map();
+  const definitions = new Map([["home-assistant", class {}]]);
+  const registry = entries => ({
+    get: name => entries.get(name),
+    define: (name, constructor) => {
+      assert(!entries.has(name), `Duplicate registration: ${name}`);
+      entries.set(name, constructor);
+    },
+    whenDefined: async name => {
+      assert.equal(name, "home-assistant");
+      if (!entries.has(name)) { waiting(); await boot; }
+    },
+  });
+  class ReadyHTMLElement {}
+  globalThis.document = { querySelector: () => ({}) };
+  globalThis.window = { customCards: [] };
+  globalThis.HTMLElement = cold ? class {} : ReadyHTMLElement;
+  globalThis.customElements = registry(cold ? nativeDefinitions : definitions);
+  const touUrl = `data:text/javascript;base64,${Buffer.from(mode === "cached-helper" ? source : `${source}\n// ${mode}`).toString("base64")}`;
+  const url = `data:text/javascript;base64,${Buffer.from(`${cardSource.replace(/data:text\/javascript;base64,[A-Za-z0-9+/=]+/, touUrl)}\n// ${mode}`).toString("base64")}`;
+  const imports = Promise.all([import(touUrl), import(url), import(`${url}#dashboard-resource`)]);
+  if (cold) {
+    await started;
+    assert.equal(nativeDefinitions.size, 0, "Cards must wait before using HA's initial registry");
+    globalThis.HTMLElement = ReadyHTMLElement;
+    globalThis.customElements = registry(definitions);
+    resume();
+  }
+  await imports;
+  const names = ["solarcost-card", "solarcost-card-editor", "echo-solarcost-card"];
+  if (mode !== "cached-helper") names.push("solarcost-tou-card");
+  for (const name of names) {
+    assert(definitions.get(name)?.prototype instanceof ReadyHTMLElement, `${name} must use HA's final HTMLElement`);
+  }
+  assert.equal(window.customCards.filter(card => card.type === "solarcost-card").length, 1);
+}
+console.log("PASS: cold and warm HA startup, cached helper, registry replacement, legacy alias and duplicate resource URLs");

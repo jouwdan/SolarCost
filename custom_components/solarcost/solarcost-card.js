@@ -1,12 +1,14 @@
 /* One SolarCost card, using the integration's existing sensors and reports. */
-import { bandRows } from "./solarcost-tou-card.js";
+// HA replaces the element registry during startup; wait before importing or defining cards.
+if (document.querySelector("home-assistant")) await customElements.whenDefined("home-assistant");
+const { bandRows } = await import(`./solarcost-tou-card.js${new URL(import.meta.url).search}`);
 
 const PERIODS = ["today", "week", "month", "last_month", "last_months", "year", "last_years", "all_time"];
 const ENERGY = [
-  ["solar_kwh", "Solar generated", "mdi:white-balance-sunny", "#e5ad27"],
-  ["usage_kwh", "Home usage", "mdi:home-lightning-bolt", "#60a5fa"],
-  ["import_kwh", "Grid import", "mdi:transmission-tower-import", "#fb923c"],
-  ["export_kwh", "Grid export", "mdi:transmission-tower-export", "#34bfa5"],
+  ["solar_kwh", "Solar generated", "mdi:white-balance-sunny", "var(--echo-solar, #e5ad27)"],
+  ["usage_kwh", "Home usage", "mdi:home-lightning-bolt", "var(--echo-blue, #60a5fa)"],
+  ["import_kwh", "Grid import", "mdi:transmission-tower-import", "var(--echo-orange, #fb923c)"],
+  ["export_kwh", "Grid export", "mdi:transmission-tower-export", "var(--echo-teal, #34bfa5)"],
 ];
 const el = (tag, text, className) => {
   const node = document.createElement(tag);
@@ -35,76 +37,103 @@ class SolarCostCard extends HTMLElement {
     this.requestId = 0;
     this.shadowRoot.innerHTML = `
       <style>
-        :host { display: block; --sc-green: #34bfa5; }
+        :host { display: block; container-type: inline-size; color-scheme: var(--echo-color-scheme, normal); --sc-green: var(--echo-teal, #34bfa5); }
         * { box-sizing: border-box; }
         [hidden] { display: none !important; }
         ha-card { padding: 20px; color: var(--primary-text-color); overflow: hidden; }
-        header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        h2 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; margin: 0; }
-        h2 ha-icon { color: #e5ad27; }
-        button, select, input { font: inherit; color: var(--primary-text-color); background: var(--secondary-background-color); }
+        header { display: flex; align-items: center; justify-content: space-between; gap: var(--echo-space-12,12px); flex-wrap: wrap; }
+        h2 { display: flex; align-items: center; gap: var(--echo-space-8,8px); font-size: 20px; font-weight: 600; margin: 0; }
+        h2 ha-icon { color: var(--echo-solar, #e5ad27); }
+        button, select, input { font: inherit; color: var(--primary-text-color); background: var(--echo-secondary-button,var(--secondary-background-color)); }
         button, select { cursor: pointer; }
-        button, select, input { border: 1px solid var(--divider-color); border-radius: 10px; padding: 8px 10px; min-height: 40px; min-width: 0; }
-        select { max-width: 100%; font-size: 13px; }
+        button { font-weight: 500; }
+        button, select, input { border: var(--echo-border-width,1px) solid var(--divider-color); border-radius:var(--echo-control-radius, 10px); padding: var(--echo-space-8,8px) var(--echo-space-12,10px); min-height:44px; min-width: 0; }
+        select { max-width: 100%; font-size:var(--echo-type-14,13px); }
+        .period-control { position: relative; flex: 0 1 160px; min-width: 0; max-width: 100%; }
+        .period-control select { width: 100%; appearance: none; padding-right: 34px; }
+        .period-control::after { content: ''; position: absolute; right: 14px; top: 50%; width: 8px; height: 8px; border-right: 2px solid var(--secondary-text-color); border-bottom: 2px solid var(--secondary-text-color); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
         button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-        .dates { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; align-items: end; }
-        .dates label { flex: 1; min-width: 110px; font-size: 12px; color: var(--secondary-text-color); }
-        input { width: 100%; margin-top: 4px; font-size: 13px; }
-        .hero { padding: 24px 0 20px; }
-        .eyebrow { font-size: 13px; color: var(--secondary-text-color); }
-        .amount { font-size: clamp(32px, 8vw, 42px); line-height: 1.3; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+        .dates { display: flex; gap: var(--echo-space-8,8px); flex-wrap: wrap; margin-top: var(--echo-space-16,16px); align-items: end; }
+        .dates label { flex: 1; min-width: 110px; font-size:var(--echo-type-12,12px); color: var(--secondary-text-color); }
+        input { width: 100%; margin-top: var(--echo-space-4,4px); font-size:var(--echo-type-14,13px); }
+        .hero { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 16px; padding: 20px 0; }
+        .hero .eyebrow { grid-column: 1; grid-row: 1; }
+        .hero .amount { grid-column: 1; grid-row: 2; }
+        .hero .range { grid-column: 2; grid-row: 1 / 3; max-width: 128px; text-align: right; line-height: 1.5; }
+        .hero .context { grid-column: 1 / -1; }
+        .hero .muted { font-size: 14px; }
+        .eyebrow { font-size:var(--echo-type-14,13px); color: var(--secondary-text-color); }
+        .amount { font-size: 40px; line-height: 1.3; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
         .credit { color: var(--sc-green); }
-        .muted { font-size: 12px; color: var(--secondary-text-color); line-height: 1.5; }
-        .context { margin-top: 4px; }
-        nav { display: flex; padding: 4px; gap: 4px; border-radius: 12px; background: var(--secondary-background-color); margin-bottom: 20px; }
-        nav button { flex: 1; border: 0; background: transparent; color: var(--secondary-text-color); padding: 8px 4px; font-size: 13px; }
-        nav button[aria-pressed="true"] { color: var(--primary-text-color); background: var(--card-background-color); box-shadow: 0 1px 4px #0002; }
-        .energy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .tile { padding: 14px; border: 1px solid var(--divider-color); border-radius: 12px; }
-        .tile ha-icon { margin-bottom: 8px; --mdc-icon-size: 22px; }
-        .tile .value { font-size: 21px; font-weight: 500; margin-top: 3px; font-variant-numeric: tabular-nums; }
-        .unit { font-size: 12px; color: var(--secondary-text-color); font-weight: 400; margin-left: 4px; }
-        .flows { margin-top: 18px; }
-        .line { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 13px; }
+        .muted { font-size:var(--echo-type-12,12px); color: var(--secondary-text-color); line-height: 1.5; }
+        .context { margin-top: var(--echo-space-4,4px); }
+        nav { display: flex; padding: 4px; gap: 4px; border: 1px solid var(--divider-color); border-radius: 16px; background: var(--echo-secondary-button, var(--secondary-background-color)); margin-bottom: var(--echo-space-20,20px); }
+        nav button { flex: 1; border: 0; background: transparent; color: var(--secondary-text-color); border-radius: 12px; min-height: 44px; padding: 8px; font-size: 14px; }
+        nav button:hover { color: var(--primary-text-color); background: var(--card-background-color); }
+        nav button[aria-pressed="true"] { color: var(--card-background-color); background: var(--primary-text-color); font-weight: 600; box-shadow: var(--echo-selection-shadow, 0 1px 4px #0002); }
+        .energy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--echo-space-12,10px); }
+        .tile { padding: 16px; border: var(--echo-border-width,1px) solid var(--divider-color); border-radius: 16px; background: var(--echo-panel, var(--secondary-background-color)); }
+        .tile ha-icon { margin-bottom: var(--echo-space-8,8px); --mdc-icon-size:var(--echo-icon-24,22px); }
+        .tile .value { font-size: 24px; font-weight: 600; margin-top: var(--echo-space-4,3px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        .unit { display: inline-block; font-size:var(--echo-type-12,12px); color: var(--secondary-text-color); font-weight: 400; margin-left: var(--echo-space-4,4px); }
+        .flows { margin-top: var(--echo-space-16,18px); }
+        .line { display: flex; justify-content: space-between; gap: var(--echo-space-12,12px); padding: var(--echo-space-8,7px) 0; min-height: 40px; align-items: center; font-size: 14px; }
         .line span { min-width: 0; overflow-wrap: anywhere; }
         strong { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 500; }
-        h3 { font-size: 14px; margin: 0 0 4px; font-weight: 600; }
-        .band { margin-top: 16px; }
-        .band.export { border-top: 1px solid var(--divider-color); padding-top: 16px; margin-top: 20px; }
+        h3 { font-size:var(--echo-type-14,14px); margin: 0 0 var(--echo-space-4,4px); font-weight: 600; }
+        .band { margin-top: var(--echo-space-16,16px); }
+        .band.export { border-top: var(--echo-border-width,1px) solid var(--divider-color); padding-top: var(--echo-space-16,16px); margin-top: var(--echo-space-20,20px); }
         .band .line { padding: 0; }
-        .track { height: 8px; border-radius: 4px; margin-top: 7px; background: var(--divider-color); overflow: hidden; }
+        .track { height: 8px; border-radius:var(--echo-radius-small,4px); margin-top: var(--echo-space-8,7px); background: var(--divider-color); overflow: hidden; }
         .fill { height: 100%; border-radius: inherit; }
-        .band small { display: block; font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; }
-        details { border-top: 1px solid var(--divider-color); margin-top: 18px; padding-top: 12px; }
-        summary { cursor: pointer; font-size: 13px; padding: 5px 0; }
-        .note { margin: 12px 0 0; }
+        .band small { display: block; font-size:var(--echo-type-12,11px); color: var(--secondary-text-color); margin-top: var(--echo-space-4,4px); }
+        details { border-top: var(--echo-border-width,1px) solid var(--divider-color); margin-top: var(--echo-space-16,18px); padding-top: var(--echo-space-12,12px); }
+        summary { cursor: pointer; font-size:var(--echo-type-14,13px); padding: var(--echo-space-6,5px) 0; }
+        .note { margin: var(--echo-space-12,12px) 0 0; }
         .note:empty { display: none; }
-        footer { margin-top: 18px; }
-        .history-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-        .history-head button { font-size: 12px; min-height: 34px; padding: 5px 10px; }
-        .legend { display: flex; gap: 8px 12px; flex-wrap: wrap; margin: 14px 0 8px; font-size: 11px; }
-        .legend span { display: inline-flex; align-items: center; gap: 5px; }
+        footer { margin-top: var(--echo-space-16,18px); }
+        .history-head { display: flex; justify-content: space-between; gap: var(--echo-space-12,12px); align-items: center; }
+        .history-head button { font-size:var(--echo-type-12,12px); min-height: 34px; padding: var(--echo-space-6,5px) var(--echo-space-12,10px); }
+        .legend { display: flex; gap: var(--echo-space-8,8px) var(--echo-space-12,12px); flex-wrap: wrap; margin: var(--echo-space-16,14px) 0 var(--echo-space-8,8px); font-size:var(--echo-type-12,11px); }
+        .legend span { display: inline-flex; align-items: center; gap: var(--echo-space-6,5px); }
         .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-        .chart-area { display: flex; height: 174px; gap: 8px; margin-top: 12px; }
-        .axis { position: relative; display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: var(--secondary-text-color); padding-bottom: 4px; }
-        .plot { position: relative; flex: 1; min-width: 0; display: flex; gap: 2px; border-top: 1px solid var(--divider-color); border-bottom: 1px solid var(--divider-color); }
+        .chart-area { display: flex; height: 174px; gap: var(--echo-space-8,8px); margin-top: var(--echo-space-12,12px); }
+        .axis { position: relative; display: flex; flex-direction: column; justify-content: space-between; font-size:var(--echo-type-12,10px); color: var(--secondary-text-color); padding-bottom: var(--echo-space-4,4px); }
+        .plot { position: relative; flex: 1; min-width: 0; display: flex; gap: var(--echo-space-2,2px); border-top: var(--echo-border-width,1px) solid var(--divider-color); border-bottom: var(--echo-border-width,1px) solid var(--divider-color); }
         .baseline { position: absolute; left: 0; right: 0; height: 1px; background: var(--divider-color); pointer-events: none; }
         .column { position: relative; flex: 1; min-width: 0; min-height: 0; border: 0; border-radius: 3px; padding: 0; background: transparent; }
-        .column:hover, .column[aria-pressed="true"] { background: var(--secondary-background-color); }
+        .column:hover, .column[aria-pressed="true"] { background: var(--echo-secondary-button,var(--secondary-background-color)); }
         .column i { position: absolute; display: block; min-height: 1px; border-radius: 2px; pointer-events: none; }
-        .xlabels { display: flex; justify-content: space-between; gap: 4px; margin-top: 7px; font-size: 10px; color: var(--secondary-text-color); }
-        .selection { margin-top: 16px; }
-        .selection .energy { gap: 6px 16px; margin-top: 8px; }
-        .selection .line { display: block; padding: 3px 0; }
-        .selection strong { display: block; margin-top: 3px; }
+        .xlabels { display: flex; justify-content: space-between; gap: var(--echo-space-4,4px); margin-top: var(--echo-space-8,7px); font-size:var(--echo-type-12,10px); color: var(--secondary-text-color); }
+        .selection { margin-top: var(--echo-space-16,16px); }
+        .selection .energy { gap: var(--echo-space-6,6px) var(--echo-space-16,16px); margin-top: var(--echo-space-8,8px); }
+        .selection .line { display: block; padding: var(--echo-space-4,3px) 0; }
+        .selection strong { display: block; margin-top: var(--echo-space-4,3px); }
         .error { color: var(--error-color, #db4437); }
+        .grid-energy { margin: 12px 0; }
+        .device-details { margin-top: 12px; }
+        .device-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; font-size: 14px; list-style: none; color: var(--primary-color); }
+        .device-details > summary::after { content: '+'; font-size: 20px; }
+        .device-details[open] > summary::after { content: '−'; }
+        .device-details > summary::-webkit-details-marker { display: none; }
+        input, select { border-width: 1px; }
+        @container (max-width: 430px) {
+          header { gap: var(--echo-space-8,8px); }
+          h2 { line-height: 1.35; }
+          button, input, select, summary { min-height: 44px; touch-action: manipulation; }
+          input, select { font-size: var(--echo-type-16,16px); }
+          nav { overflow-x: auto; overscroll-behavior-x: contain; }
+          .muted, .eyebrow { font-size: var(--echo-type-14,13px); }
+          .history-head { flex-wrap: wrap; }
+          .history-head button { min-height: 44px; }
+        }
       </style>
       <ha-card>
-        <header><h2><ha-icon icon="mdi:solar-power"></ha-icon><span>SolarCost</span></h2><select class="period" aria-label="Reporting period"></select></header>
+        <header><h2><ha-icon icon="mdi:solar-power"></ha-icon><span>SolarCost</span></h2><div class="period-control"><select class="period" aria-label="Reporting period"></select></div></header>
         <form class="dates" hidden><label>From<input type="date" name="start" required></label><label>To<input type="date" name="end" required></label><button>Apply</button></form>
         <div class="hero"><div class="eyebrow">Estimated bill</div><div class="amount">—</div><div class="muted range"></div><div class="muted context" role="status"></div></div>
-        <nav aria-label="Card view"><button data-view="overview" aria-pressed="true">Overview</button><button data-view="costs" aria-pressed="false">Costs</button><button data-view="history" aria-pressed="false">History</button></nav>
-        <section class="overview"><div class="energy"></div><div class="flows"></div></section>
+        <nav aria-label="Card view"><button data-view="overview" aria-pressed="true">Summary</button><button data-view="costs" aria-pressed="false">Costs</button><button data-view="history" aria-pressed="false">History</button></nav>
+        <section class="overview"><div class="energy"></div><details class="device-details"><summary>Grid exchange</summary><div class="grid-energy energy"></div><div class="flows"></div></details></section>
         <section class="costs" hidden><h3>Energy costs and credits</h3><div class="bars" role="list" aria-label="Costs by time band and export credit"></div><p class="muted band-note note"></p><details class="bill-details" open><summary>Bill breakdown</summary><div class="breakdown"></div></details><details><summary>Current rates</summary><div class="rates"></div><p class="muted">Effective prices now, including configured discounts and VAT. Historical costs retain their recorded prices.</p></details></section>
         <section class="history" hidden><div class="history-head"><h3>Bill history</h3><button class="chart-toggle">Show energy</button></div><p class="muted history-status" role="status"></p><div class="history-chart"></div></section>
         <footer class="muted">Estimates include configured discounts, tax and fixed charges.</footer>
@@ -275,6 +304,7 @@ class SolarCostCard extends HTMLElement {
       tile.append(symbol, el("div", name, "muted"), value);
       return tile;
     }));
+    root.querySelector(".grid-energy").replaceChildren(...[...root.querySelector(".overview > .energy").children].slice(2));
     root.querySelector(".flows").replaceChildren(
       this.line("Imported electricity", this.money(this.data.import_cost)),
       this.line("Export credit", this.money(this.data.export_credit)),
@@ -420,13 +450,14 @@ class SolarCostCardEditor extends HTMLElement {
     this.attachShadow({ mode: "open" }).innerHTML = `
       <style>
         :host { display: block; color: var(--primary-text-color); }
-        label { display: block; margin: 16px 0; font-size: 14px; }
+        label { display: block; margin: var(--echo-space-16,16px) 0; font-size:var(--echo-type-14,14px); }
         input, select { display: block; box-sizing: border-box; width: 100%; min-height: 44px;
-          margin-top: 6px; padding: 10px; font: inherit; color: var(--primary-text-color);
-          background: var(--secondary-background-color); border: 1px solid var(--divider-color); border-radius: 8px; }
+          margin-top: var(--echo-space-6,6px); padding: var(--echo-space-12,10px); font: inherit; color: var(--primary-text-color);
+          background: var(--echo-secondary-button,var(--secondary-background-color)); border: var(--echo-border-width,1px) solid var(--divider-color); border-radius:var(--echo-radius-small,8px); }
         input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-        h3 { font-size: 15px; margin: 24px 0 0; }
-        p { font-size: 13px; line-height: 1.5; color: var(--secondary-text-color); }
+        h3 { font-size:var(--echo-type-16,15px); margin: var(--echo-space-24,24px) 0 0; }
+        p { font-size:var(--echo-type-14,13px); line-height: 1.5; color: var(--secondary-text-color); }
+        input, select { border-width: 1px; }
       </style>
       <label>SolarCost bill sensor<select class="entity" required></select></label>
       <p>Choose the setup and period to show initially. All its other periods are available in the card.</p>
@@ -499,3 +530,6 @@ if (!customElements.get("solarcost-card")) {
   window.customCards = window.customCards || [];
   window.customCards.push({ type: "solarcost-card", name: "SolarCost", description: "Energy, bill estimates, time-of-use costs and history in one card." });
 }
+
+// Preserve dashboards using the earlier HA-local card name.
+if (!customElements.get("echo-solarcost-card")) customElements.define("echo-solarcost-card", class extends SolarCostCard {});
