@@ -6,6 +6,9 @@ import logging
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from threading import get_ident
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import yaml
 from homeassistant import bootstrap, loader
@@ -171,6 +174,12 @@ async def block_flows(hass):
 
 async def main():
     logging.basicConfig(level=logging.WARNING)
+    loop_thread = get_ident()
+
+    def load_uncached_zone(key):
+        assert get_ident() != loop_thread, "Timezone database must be loaded off the event loop"
+        return ZoneInfo.no_cache(key)
+
     with tempfile.TemporaryDirectory() as directory:
         Path(directory, "custom_components").symlink_to(
             Path(__file__).resolve().parents[1] / "custom_components"
@@ -279,13 +288,17 @@ async def main():
                 },
             )
             assert flow["step_id"] == "bands", flow
-            flow = await hass.config_entries.flow.async_configure(
-                flow["flow_id"], {"next_step_id": "save"}
-            )
+            with patch(
+                "custom_components.solarcost.ledger.ZoneInfo", side_effect=load_uncached_zone
+            ) as zone:
+                flow = await hass.config_entries.flow.async_configure(
+                    flow["flow_id"], {"next_step_id": "save"}
+                )
+                await hass.async_block_till_done()
+                assert zone.call_count == 1
             assert flow["type"] == "create_entry", flow
             entry = flow["result"]
             assert entry.data["tariff_model"] == "flat" and not entry.data["block_categories"]
-            await hass.async_block_till_done()
             assert entry.state.value == "loaded", entry.state
             coordinator = entry.runtime_data
             for source, value in (("solar", 112), ("usage", 118), ("import", 110), ("export", 104)):
@@ -349,7 +362,11 @@ async def main():
             await hass.async_block_till_done()
             await coordinator.async_refresh()
             assert coordinator.data["periods"]["all_time"]["import_kwh"] == 125
-            assert await hass.config_entries.async_reload(entry.entry_id)
+            with patch(
+                "custom_components.solarcost.ledger.ZoneInfo", side_effect=load_uncached_zone
+            ) as zone:
+                assert await hass.config_entries.async_reload(entry.entry_id)
+                assert zone.call_count == 1
             await hass.async_block_till_done()
             assert entry.runtime_data.data["periods"]["all_time"]["import_kwh"] == 125
             options = await hass.config_entries.options.async_init(entry.entry_id)
@@ -369,7 +386,7 @@ async def main():
             assert await hass.config_entries.async_unload(entry.entry_id)
             await block_flows(hass)
             print(
-                "PASS: fractional power helpers, grid direction, setup, 74 translated sensors, last-month history, time-band costs and card template, reports, queued reset, reload persistence, options and unload"
+                "PASS: uncached timezone setup and reload off the event loop, fractional power helpers, grid direction, 74 translated sensors, last-month history, time-band costs and card template, reports, queued reset, reload persistence, options and unload"
             )
         finally:
             await hass.async_stop()
