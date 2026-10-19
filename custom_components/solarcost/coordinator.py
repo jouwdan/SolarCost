@@ -24,14 +24,15 @@ class SolarCostCoordinator(DataUpdateCoordinator):
         )
         self.settings = {**entry.data, **entry.options}
         self._pending = []
-        self.ledger = Ledger(
-            hass.config.path("solarcost", f"{entry.entry_id}.db"),
-            self.settings["time_zone"],
-            self.settings["currency"],
-        )
 
     async def _async_setup(self):
         try:
+            self.ledger = await self.hass.async_add_executor_job(
+                Ledger,
+                self.hass.config.path("solarcost", f"{self.config_entry.entry_id}.db"),
+                self.settings["time_zone"],
+                self.settings["currency"],
+            )
             await self.hass.async_add_executor_job(
                 self.ledger.initialize, dt_util.utcnow().timestamp()
             )
