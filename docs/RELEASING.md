@@ -1,6 +1,8 @@
 # Maintaining and releasing SolarCost
 
-SolarCost is one HACS **Integration** repository. Its Python integration, JavaScript cards, translations, templates and icon all live under `custom_components/solarcost`. The card is registered by the integration; it does not need a separate HACS Dashboard repository or release.
+SolarCost is one Marketplace **Integration** repository. Its Python integration, JavaScript cards, translations, templates and icon all live under `custom_components/solarcost`. The card is registered by the integration; it does not need a separate Marketplace Dashboard repository or release.
+
+Marketplace is built into Home Assistant 2026.11 and later. Its [publisher tooling](https://contributors.home-assistant.io/marketplace/how-it-works/) still uses `hacs.json`, `hacs/action` and the `hacs/default` catalog; keep these names and files.
 
 ## Validation
 
@@ -43,32 +45,32 @@ The archive check intentionally fails if the working integration differs from th
 2. Commit using conventional messages, open a pull request, and merge into `main` after **Validate** passes. Check the card, setup and upgrades in a development Home Assistant instance when changing runtime behavior.
 3. Open **GitHub → Actions → Release → Run workflow**, select **main**, and run it. Do not create a tag or release beforehand.
 4. The [Release workflow](../.github/workflows/release.yml) reruns all validation on that commit. Only after every job passes does it publish `v<manifest version>` and a full GitHub release, attach the tested `solarcost.zip` and `solarcost.zip.sha256`, and include installation instructions, generated release notes and a link to the validation run.
-5. Open the release and check the notes and assets. Install the published version through HACS in a development instance, restart Home Assistant, then verify the integration and card.
+5. Open the release and check the notes and assets. Install the published version through **Settings → Marketplace** in a development instance running Home Assistant 2026.11 or later, follow setup and restart if requested, then refresh the browser and verify the integration and card. For an existing installation, update through **Settings → Updates** and restart.
 
 The workflow only publishes from `main`, serializes release runs, and never moves an existing tag. An existing tag must point at the validated commit; an already published version fails instead of replacing its release. A failed validation publishes nothing. Fix code failures in a new commit and rerun; for a transient infrastructure failure, rerun the failed jobs. If a release was already published, bump the version for further changes.
 
 Only the publishing job has `contents: write`; checks have read access. GitHub's built-in `GITHUB_TOKEN` is sufficient. No personal access token, Home Assistant credentials or local filesystem access is needed by CI. Ensure Actions are enabled for the repository and repository/organization policies permit the workflow's requested token permissions.
 
-HACS uses the integration directory from the released GitHub source. We deliberately leave `zip_release` unset in `hacs.json`: the attached flat ZIP is for convenient manual installation, while HACS uses its standard source download. The ZIP has `manifest.json` at its root, not another `custom_components` directory. It contains the committed integration files and MIT license; no tests, screenshots, development files or household data are packaged.
+Marketplace uses the integration directory from the released GitHub source. We deliberately leave `zip_release` unset in `hacs.json`: the attached flat ZIP is for convenient manual installation, while Marketplace uses its standard source download. The ZIP has `manifest.json` at its root, not another `custom_components` directory. It contains the committed integration files and MIT license; no tests, screenshots, development files or household data are packaged.
 
 ## Deploy and roll back
 
-Releasing makes an update available; it does not automatically install into anyone's Home Assistant. Users download it in HACS, restart Home Assistant and refresh their dashboard. Manual users extract `solarcost.zip` into `config/custom_components/solarcost/`.
+Releasing makes an update available; it does not automatically install into anyone's Home Assistant. Users install it through **Settings → Updates**, restart Home Assistant and refresh their dashboard. Manual users extract `solarcost.zip` into `config/custom_components/solarcost/` and restart. See the [README](../README.md#installation) for first-time installation through Marketplace or manually.
 
-Create a Home Assistant backup before updating. SolarCost keeps its ledger under `config/solarcost/`, outside the integration's replaceable code directory. HACS updates preserve the configuration entry and this history. Do not delete or re-add the integration to update it.
+Create a Home Assistant backup before updating. SolarCost keeps its ledger under `config/solarcost/`, outside the integration's replaceable code directory. Marketplace updates preserve the configuration entry and this history. Do not delete or re-add the integration to update it.
 
-If a release breaks an installation, select a previous release in HACS's download controls or install that version manually, then restart Home Assistant and refresh the browser. If the failed update changed stored-data formats, restore the pre-update backup with the previous code. Publish a new patch version to fix a bad release; never replace a published tag with different code.
+If a release breaks an installation, restore the pre-update Home Assistant backup, including the previous code and ledger, then refresh the browser. The [Marketplace documentation](https://www.home-assistant.io/integrations/marketplace/#installing-another-version) recommends restoring a backup rather than using **Install another version** to downgrade after an update. Publish a new patch version to fix a bad release; never replace a published tag with different code.
 
-## Submit to the HACS default list
+## Submit to the Marketplace catalog
 
-Custom-repository installation works before default-list approval. Default inclusion is a separate review by HACS; a passing workflow does not automatically submit or list SolarCost.
+Custom-repository installation through **Settings → Marketplace → Add from link** works before catalog approval and requires a GitHub connection. Catalog inclusion is a separate review by the HACS team in `hacs/default`; a passing workflow does not automatically submit or list SolarCost.
 
 1. Verify that `jouwdan/SolarCost` is public, has Issues enabled, a description, and relevant topics such as `home-assistant`, `hacs`, `solar-energy` and `energy-monitoring`. Install the latest release as an **Integration** custom repository and confirm it works.
 2. Run **Release** successfully. HACS requires passing HACS and Hassfest actions, no ignored checks, and a full GitHub release created after validation. Keep the release URL and successful action-run URL for the submission.
 3. Fork [hacs/default](https://github.com/hacs/default) into your personal GitHub account. Create a new branch from its `master` branch, for example `add-solarcost`.
 4. Edit the root [`integration`](https://github.com/hacs/default/blob/master/integration) JSON array and insert `"jouwdan/SolarCost"` in sorted order. Keep the repository's exact spelling and capitalization. SolarCost belongs in `integration`, including its bundled card.
-5. Open a pull request against `hacs/default:master`, allow maintainer edits, complete the current checklist, and supply the release, successful HACS and successful Hassfest links. Both check links can point to the completed Release run, which includes those validation jobs. Wait for the checks and maintainer review; once merged, HACS picks it up in a subsequent scheduled scan.
+5. Open a pull request against `hacs/default:master`, allow maintainer edits, complete the current checklist, and supply the release, successful HACS and successful Hassfest links. Both check links can point to the completed Release run, which includes those validation jobs. Wait for the checks and maintainer review; once merged, the catalog includes it in a subsequent scheduled scan.
 
 The bundled `custom_components/solarcost/brand/icon.png` satisfies the current HACS brand check. A separate submission to `home-assistant/brands` is not required for this integration. SolarCost supports configurable tariffs and currencies rather than a specific country, so `country` is omitted from `hacs.json`.
 
-Use the live [HACS submission guide](https://www.hacs.xyz/docs/publish/include/), [integration requirements](https://www.hacs.xyz/docs/publish/integration/), [HACS action documentation](https://www.hacs.xyz/docs/publish/action/) and [current pull request template](https://github.com/hacs/default/blob/master/.github/PULL_REQUEST_TEMPLATE.md) when submitting; their requirements can change. The current [brand validator](https://github.com/hacs/integration/blob/main/custom_components/hacs/validate/brands.py) accepts bundled icons.
+Use the live [Marketplace catalog guide](https://contributors.home-assistant.io/marketplace/guides/catalog/), [integration requirements](https://contributors.home-assistant.io/marketplace/guides/integrations/), [HACS action documentation](https://www.hacs.xyz/docs/publish/action/) and [current pull request template](https://github.com/hacs/default/blob/master/.github/PULL_REQUEST_TEMPLATE.md) when submitting; their requirements can change. The current [brand validator](https://github.com/hacs/integration/blob/main/custom_components/hacs/validate/brands.py) accepts bundled icons.

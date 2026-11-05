@@ -1,7 +1,7 @@
 # Optional Home Assistant package: convert live power in W to energy in kWh.
 # Replace sensor.solar_power, sensor.home_power and sensor.grid_power below.
 # Grid power must be positive for import and negative for export.
-# Copy outside custom_components before editing; HACS updates replace that folder.
+# Copy outside custom_components before editing; integration updates replace that folder.
 template:
   - sensor:
       - name: SolarCost Import Power
