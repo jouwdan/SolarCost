@@ -2,13 +2,13 @@
 
 [![Validate](https://github.com/jouwdan/SolarCost/actions/workflows/validate.yml/badge.svg)](https://github.com/jouwdan/SolarCost/actions/workflows/validate.yml)
 [![Release](https://img.shields.io/github/v/release/jouwdan/SolarCost)](https://github.com/jouwdan/SolarCost/releases/latest)
-[![HACS custom integration](https://img.shields.io/badge/HACS-Custom_Integration-41BDF5)](https://www.hacs.xyz/docs/faq/custom_repositories/)
+[![Open SolarCost in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=jouwdan&repository=SolarCost&category=integration)
 
 <img src="custom_components/solarcost/brand/icon.png" alt="SolarCost sun and lightning icon" width="96" height="96">
 
 SolarCost estimates electricity bills in Home Assistant using solar generation, household consumption, grid import and grid export. Enter your electricity tariff to track energy costs, export credit and optional fixed charges across daily, weekly, monthly and yearly periods.
 
-SolarCost is a **custom integration compatible with HACS**. It runs locally inside Home Assistant and is configured through the UI. No separate Supervisor app or SolarCost cloud account is required.
+SolarCost is **available in the Home Assistant Marketplace**: search for **SolarCost** to install it. It runs locally inside Home Assistant and is configured through the UI. No separate Supervisor app or SolarCost cloud account is required.
 
 **Tracking starts when you finish setup.** SolarCost does not import energy history recorded before installation. Bill estimates show charges accrued so far, rather than a forecast of the final bill.
 
@@ -17,20 +17,27 @@ SolarCost is a **custom integration compatible with HACS**. It runs locally insi
 - Home Assistant **2026.9.0 or later**.
 - Four separate cumulative energy sensors for solar generation, household consumption, grid import and grid export.
 - Your supplier's import prices, export payment and any applicable tariff times or fixed charges.
-- HACS for the HACS installation method; manual installation is also supported.
+- Home Assistant **2026.11 or later** for the built-in Marketplace; manual installation is also supported on earlier supported versions.
 
 ## Installation
 
-### Install with HACS
+### Install with Marketplace
 
-Until SolarCost is included in the HACS default list, add it as a custom repository. The integration and dashboard card are distributed together.
+The [Marketplace](https://www.home-assistant.io/integrations/marketplace/) is built into Home Assistant 2026.11 and later. The integration and dashboard card are distributed together.
 
-1. Open **HACS → ⋮ → Custom repositories**.
-2. Add `https://github.com/jouwdan/SolarCost` with the category **Integration**.
-3. Find **SolarCost** in HACS and download the latest release.
-4. Restart Home Assistant.
-5. Open **Settings → Devices & services → Add integration** and search for **SolarCost**.
-6. Follow the setup steps below.
+1. Open **Settings → Marketplace** as an administrator and search for **SolarCost**.
+2. Accept the Marketplace notice if prompted, then select **SolarCost → Install**, review the version and confirm **Install**.
+3. Follow the setup flow that opens, using the setup steps below. If you close it, open **Settings → Devices & services → Add integration → SolarCost** later. Restart only if Home Assistant asks you to.
+
+Already installed through HACS? Home Assistant migrates installed projects and custom repositories automatically when you upgrade to 2026.11; you do not need to reinstall SolarCost.
+
+#### Custom repository fallback
+
+If SolarCost does not appear in your Marketplace search results, add it from its repository link:
+
+1. Open **Settings → Marketplace → Add from link**.
+2. Enter `https://github.com/jouwdan/SolarCost` under **GitHub link** and select **Add**. Connect your GitHub account if prompted; custom repositories require this connection. If asked for a type, choose **Integration** and select **Add** again.
+3. Open **SolarCost**, then follow the installation steps above from step 2.
 
 ### Install manually
 
@@ -173,7 +180,7 @@ One card, one selected period. Switch between the energy overview, time-of-use c
 
 The included **SolarCost card** brings energy, bill estimates, tariff costs and history into one card. It loads automatically with the integration; no separate frontend plugins or Recorder statistics are required.
 
-1. Restart Home Assistant after installing or updating SolarCost, then refresh your browser.
+1. Refresh your browser after setup. After an update, restart Home Assistant first; also restart if Home Assistant requests it during installation.
 2. Open your dashboard and choose **Edit → Add card → By card**, then search for **SolarCost**.
 3. In the visual editor, choose your **SolarCost bill sensor** and optionally set a title or time-band display labels. Check the preview and save.
 
@@ -295,7 +302,7 @@ SolarCost keeps its own daily history independently of Home Assistant's Recorder
 
 ## Updates and backups
 
-Published [GitHub releases](https://github.com/jouwdan/SolarCost/releases) are the update source for HACS. For HACS installations, install updates through HACS and restart Home Assistant. For manual installations, replace the integration files with the new version and restart. Refresh dashboard browsers to load the matching card version. You do not need to remove or re-add the integration.
+Published [GitHub releases](https://github.com/jouwdan/SolarCost/releases) are the update source for Marketplace. Install available updates through **Settings → Updates**, then restart Home Assistant when prompted by the repair. For manual installations, replace the integration files with the new version and restart. Refresh dashboard browsers to load the matching card version. You do not need to remove or re-add the integration.
 
 Include the `solarcost` folder in your Home Assistant configuration directory in backups. Its databases are stored as `solarcost/<config_entry_id>.db`. For a manual file copy, stop Home Assistant first so the database is not being written during the copy.
 
@@ -320,7 +327,7 @@ For problems that remain, check **Settings → System → Logs** and [open an is
 
 ## Contributing and releases
 
-Pull requests run accounting and card tests, an installable-archive check, a Home Assistant lifecycle test, Hassfest and HACS validation. The same checks run weekly and before every release. See the [maintainer guide](docs/RELEASING.md) for local checks, the one-click release process, deployment and rollback, and submission to the HACS default list.
+Pull requests run accounting and card tests, an installable-archive check, a Home Assistant lifecycle test, Hassfest and HACS validation (the publisher checks still used by Marketplace). The same checks run weekly and before every release. See the [maintainer guide](docs/RELEASING.md) for local checks, the one-click release process, deployment and rollback, and submission to the Marketplace catalog.
 
 ## License
 

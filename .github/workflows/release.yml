@@ -52,11 +52,11 @@ jobs:
 
           Requires Home Assistant $(jq -r '.homeassistant' hacs.json) or later.
 
-          **HACS:** add **$GITHUB_REPOSITORY** as an Integration custom repository, then download this release. The dashboard card is included.
+          **Marketplace (Home Assistant 2026.11+):** open **Settings → Marketplace**, search for **SolarCost**, select **Install** and follow setup. If it is missing, select **Add from link** and enter **https://github.com/$GITHUB_REPOSITORY**; connect GitHub if prompted. The dashboard card is included.
 
           **Manual install:** extract **solarcost.zip** directly into **config/custom_components/solarcost/**.
 
-          After installing or updating, restart Home Assistant and refresh the dashboard browser. Existing SolarCost settings and history are preserved. Back up Home Assistant before updating.
+          Marketplace opens setup after a new installation; restart if Home Assistant asks you to. Install updates through **Settings → Updates** and restart afterward. Manual installations also require a restart. Refresh the dashboard browser. Existing SolarCost settings and history are preserved. Back up Home Assistant before updating.
 
           [Installation and setup](https://github.com/$GITHUB_REPOSITORY/blob/$RELEASE_TAG/README.md) · [Successful validation](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
 
